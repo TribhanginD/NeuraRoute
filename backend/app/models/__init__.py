@@ -3,7 +3,7 @@ Data models for NeuraRoute
 """
 
 from .base import Base
-from .agent import Agent
+from .agents import Agent
 from .simulation import SimulationState
 from .fleet import Vehicle, Route, Delivery, Fleet
 from .orders import Order
