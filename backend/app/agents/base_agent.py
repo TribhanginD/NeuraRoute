@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import uuid
 import json
 
-from app.models.agents import Agent, AgentLog, AgentMemory, AgentStatus, TaskStatus
+from app.models.agents import Agent, AgentLog, AgentStatus
 from app.core.database import get_db
 from app.core.config import settings
 
@@ -16,49 +16,47 @@ logger = structlog.get_logger()
 class BaseAgent(ABC):
     """Base class for all autonomous agents"""
     
-    def __init__(self, agent_record: Agent):
-        self.agent_record = agent_record
-        self.agent_id = agent_record.agent_id
-        self.name = agent_record.name
-        self.agent_type = agent_record.agent_type
-        self.config = agent_record.config or {}
-        self.status = agent_record.status
-        self.last_heartbeat = agent_record.last_heartbeat
-        self.tasks_completed = agent_record.tasks_completed
-        self.tasks_failed = agent_record.tasks_failed
-        self.average_response_time = agent_record.average_response_time
-        
+    def __init__(self, agent_id):
+        self.agent_id = agent_id
+        self.name = None
+        self.agent_type = None
+        self.config = None
+        self.status = None
+        self.last_heartbeat = None
         # Memory management
         self.memory = {}
         self.context_window = []
-        
         # Performance tracking
         self.cycle_count = 0
         self.last_cycle_time = None
         self.error_count = 0
-        self.max_retries = settings.max_agent_retries
+        self.max_retries = settings.AGENT_MAX_RETRIES
         
+    async def _get_agent_record(self, db):
+        return await db.get(Agent, self.agent_id)
+
     async def initialize(self):
-        """Initialize the agent"""
-        logger.info(f"Initializing {self.name}", agent_id=self.agent_id)
-        
+        logger.info(f"Initializing agent", agent_id=self.agent_id)
         try:
-            # Load agent memory
-            await self._load_memory()
-            
-            # Initialize agent-specific components
-            await self._initialize_agent()
-            
-            # Update status
-            self.status = AgentStatus.IDLE
-            await self._update_status()
-            
-            logger.info(f"{self.name} initialized successfully", agent_id=self.agent_id)
-            
+            async for db in get_db():
+                agent_record = await self._get_agent_record(db)
+                self.name = agent_record.name
+                self.agent_type = agent_record.agent_type
+                self.config = agent_record.config or {}
+                self.status = agent_record.status
+                self.last_heartbeat = agent_record.last_cycle
+                await self._load_memory(db, agent_record)
+                await self._initialize_agent()
+                self.status = AgentStatus.STOPPED
+                await self._update_status(db, agent_record)
+                logger.info(f"{self.name} initialized successfully", agent_id=self.agent_id)
+                break
         except Exception as e:
-            logger.error(f"Failed to initialize {self.name}", agent_id=self.agent_id, error=str(e))
+            logger.error(f"Failed to initialize agent", agent_id=self.agent_id, error=str(e))
             self.status = AgentStatus.ERROR
-            await self._update_status()
+            async for db in get_db():
+                agent_record = await self._get_agent_record(db)
+                await self._update_status(db, agent_record)
             raise
     
     async def stop(self):
@@ -70,11 +68,15 @@ class BaseAgent(ABC):
             await self._stop_agent()
             
             # Save memory
-            await self._save_memory()
+            async for db in get_db():
+                agent_record = await self._get_agent_record(db)
+                await self._save_memory(db, agent_record)
             
             # Update status
-            self.status = AgentStatus.OFFLINE
-            await self._update_status()
+            self.status = AgentStatus.STOPPED
+            async for db in get_db():
+                agent_record = await self._get_agent_record(db)
+                await self._update_status(db, agent_record)
             
             logger.info(f"{self.name} stopped successfully", agent_id=self.agent_id)
             
@@ -87,8 +89,10 @@ class BaseAgent(ABC):
         
         try:
             # Update status to busy
-            self.status = AgentStatus.BUSY
-            await self._update_status()
+            self.status = AgentStatus.RUNNING
+            async for db in get_db():
+                agent_record = await self._get_agent_record(db)
+                await self._update_status(db, agent_record)
             
             # Run agent-specific cycle
             await self._run_cycle_logic()
@@ -98,8 +102,10 @@ class BaseAgent(ABC):
             self._update_performance_metrics(cycle_duration)
             
             # Update status to idle
-            self.status = AgentStatus.IDLE
-            await self._update_status()
+            self.status = AgentStatus.STOPPED
+            async for db in get_db():
+                agent_record = await self._get_agent_record(db)
+                await self._update_status(db, agent_record)
             
             self.cycle_count += 1
             self.last_cycle_time = datetime.utcnow()
@@ -115,7 +121,7 @@ class BaseAgent(ABC):
         
         try:
             # Log action start
-            await self._log_action(task_id, action, parameters, TaskStatus.RUNNING)
+            await self._log_action(task_id, action, parameters, "running")
             
             # Execute action
             result = await self._execute_action(action, parameters)
@@ -125,7 +131,7 @@ class BaseAgent(ABC):
             
             # Log successful completion
             await self._log_action(
-                task_id, action, parameters, TaskStatus.COMPLETED,
+                task_id, action, parameters, "completed",
                 output_data=result, execution_time_ms=execution_time
             )
             
@@ -135,7 +141,7 @@ class BaseAgent(ABC):
             # Log error
             execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             await self._log_action(
-                task_id, action, parameters, TaskStatus.FAILED,
+                task_id, action, parameters, "failed",
                 error_message=str(e), execution_time_ms=execution_time
             )
             raise
@@ -151,9 +157,11 @@ class BaseAgent(ABC):
         if self.error_count > self.max_retries:
             self.status = AgentStatus.ERROR
         else:
-            self.status = AgentStatus.IDLE
+            self.status = AgentStatus.STOPPED
         
-        await self._update_status()
+        async for db in get_db():
+            agent_record = await self._get_agent_record(db)
+            await self._update_status(db, agent_record)
         
         # Store error in memory
         await self._store_memory("error", f"error_{self.error_count}", {
@@ -165,7 +173,6 @@ class BaseAgent(ABC):
     def update_heartbeat(self):
         """Update agent heartbeat"""
         self.last_heartbeat = datetime.utcnow()
-        self.agent_record.last_heartbeat = self.last_heartbeat
     
     def is_healthy(self) -> bool:
         """Check if agent is healthy"""
@@ -187,134 +194,73 @@ class BaseAgent(ABC):
         """Get the interval between cycles in seconds"""
         return self.config.get("check_interval", 300)
     
-    async def _load_memory(self):
-        """Load agent memory from database"""
-        db = next(get_db())
-        
-        try:
-            memories = db.query(AgentMemory).filter(
-                AgentMemory.agent_id == self.agent_record.id,
-                AgentMemory.is_expired() == False
-            ).order_by(AgentMemory.importance.desc()).all()
-            
-            for memory in memories:
-                self.memory[memory.key] = memory.value
-                
-        except Exception as e:
-            logger.error(f"Failed to load memory for {self.name}", error=str(e))
-        finally:
-            db.close()
+    async def _load_memory(self, db, agent_record):
+        db.refresh(agent_record)
+        self.memory = agent_record.memory or {}
     
-    async def _save_memory(self):
-        """Save agent memory to database"""
-        db = next(get_db())
-        
-        try:
-            for key, value in self.memory.items():
-                # Check if memory already exists
-                existing = db.query(AgentMemory).filter(
-                    AgentMemory.agent_id == self.agent_record.id,
-                    AgentMemory.key == key
-                ).first()
-                
-                if existing:
-                    existing.value = value
-                    existing.updated_at = datetime.utcnow()
-                else:
-                    memory = AgentMemory(
-                        agent_id=self.agent_record.id,
-                        memory_type="context",
-                        key=key,
-                        value=value,
-                        importance=1.0
-                    )
-                    db.add(memory)
-            
-            db.commit()
-            
-        except Exception as e:
-            logger.error(f"Failed to save memory for {self.name}", error=str(e))
-            db.rollback()
-        finally:
-            db.close()
+    async def _save_memory(self, db, agent_record):
+        agent_record.memory = self.memory
+        db.add(agent_record)
+        await db.commit()
     
     async def _store_memory(self, memory_type: str, key: str, value: Any, importance: float = 1.0):
-        """Store a memory entry"""
-        db = next(get_db())
-        
-        try:
-            memory = AgentMemory(
-                agent_id=self.agent_record.id,
-                memory_type=memory_type,
-                key=key,
-                value=value,
-                importance=importance
-            )
-            db.add(memory)
-            db.commit()
-            
-            # Update local memory
-            self.memory[key] = value
-            
-        except Exception as e:
-            logger.error(f"Failed to store memory for {self.name}", error=str(e))
-            db.rollback()
-        finally:
-            db.close()
+        """Store a memory item in the Agent model's memory JSON field"""
+        if not self.memory:
+            self.memory = {}
+        if memory_type not in self.memory:
+            self.memory[memory_type] = {}
+        self.memory[memory_type][key] = {
+            "value": value,
+            "importance": importance,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        async for db in get_db():
+            agent_record = await self._get_agent_record(db)
+            await self._save_memory(db, agent_record)
     
     async def _log_action(
         self,
         task_id: str,
         action: str,
         input_data: Dict[str, Any],
-        status: TaskStatus,
+        status: str,
         output_data: Dict[str, Any] = None,
         error_message: str = None,
         execution_time_ms: int = None,
         reasoning: str = None
     ):
         """Log an agent action"""
-        db = next(get_db())
-        
-        try:
-            log = AgentLog(
-                agent_id=self.agent_record.id,
-                task_id=task_id,
-                action=action,
-                status=status,
-                input_data=input_data,
-                output_data=output_data,
-                error_message=error_message,
-                execution_time_ms=execution_time_ms,
-                reasoning=reasoning
-            )
-            db.add(log)
-            db.commit()
-            
-        except Exception as e:
-            logger.error(f"Failed to log action for {self.name}", error=str(e))
-            db.rollback()
-        finally:
-            db.close()
+        async for db in get_db():
+            try:
+                # Create context with all the action data
+                context = {
+                    "task_id": task_id,
+                    "action": action,
+                    "status": status,
+                    "input_data": input_data,
+                    "output_data": output_data,
+                    "error_message": error_message,
+                    "execution_time_ms": execution_time_ms,
+                    "reasoning": reasoning
+                }
+                
+                log = AgentLog(
+                    agent_id=self.agent_id,
+                    level="info" if status == "completed" else "error" if status == "failed" else "debug",
+                    message=f"Action {action} {status}",
+                    context=context
+                )
+                db.add(log)
+                await db.commit()
+                
+            except Exception as e:
+                logger.error(f"Failed to log action for {self.name}", error=str(e))
+                await db.rollback()
     
-    async def _update_status(self):
-        """Update agent status in database"""
-        db = next(get_db())
-        
-        try:
-            self.agent_record.status = self.status
-            self.agent_record.tasks_completed = self.tasks_completed
-            self.agent_record.tasks_failed = self.tasks_failed
-            self.agent_record.average_response_time = self.average_response_time
-            self.agent_record.last_heartbeat = self.last_heartbeat
-            
-            db.commit()
-            
-        except Exception as e:
-            logger.error(f"Failed to update status for {self.name}", error=str(e))
-            db.rollback()
-        finally:
-            db.close()
+    async def _update_status(self, db, agent_record):
+        agent_record.status = self.status
+        agent_record.last_cycle = self.last_heartbeat
+        await db.commit()
     
     def _update_performance_metrics(self, cycle_duration_ms: float):
         """Update performance metrics"""

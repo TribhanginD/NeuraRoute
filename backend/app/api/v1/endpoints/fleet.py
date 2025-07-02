@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from typing import List, Dict, Any
 import structlog
 
@@ -15,18 +16,19 @@ async def get_vehicles(
     vehicle_type: str = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get vehicles with optional filtering"""
     try:
-        query = db.query(Vehicle)
+        query = select(Vehicle)
         
         if status:
-            query = query.filter(Vehicle.status == status)
+            query = query.where(Vehicle.status == status)
         if vehicle_type:
-            query = query.filter(Vehicle.vehicle_type == vehicle_type)
+            query = query.where(Vehicle.vehicle_type == vehicle_type)
         
-        vehicles = query.offset(offset).limit(limit).all()
+        result = await db.execute(query.offset(offset).limit(limit))
+        vehicles = result.scalars().all()
         
         return {
             "vehicles": [
@@ -48,14 +50,15 @@ async def get_vehicles(
             "total": len(vehicles)
         }
     except Exception as e:
-        logger.error("Failed to get vehicles", error=str(e))
+        logger.error(f"Failed to get vehicles: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/vehicles/{vehicle_id}")
-async def get_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
+async def get_vehicle(vehicle_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific vehicle details"""
     try:
-        vehicle = db.query(Vehicle).filter(Vehicle.vehicle_id == vehicle_id).first()
+        result = await db.execute(select(Vehicle).where(Vehicle.vehicle_id == vehicle_id))
+        vehicle = result.scalar_one_or_none()
         if not vehicle:
             raise HTTPException(status_code=404, detail="Vehicle not found")
         
@@ -81,7 +84,7 @@ async def get_vehicle(vehicle_id: str, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get vehicle {vehicle_id}", error=str(e))
+        logger.error(f"Failed to get vehicle {vehicle_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/routes")
@@ -90,18 +93,19 @@ async def get_routes(
     vehicle_id: str = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get routes with optional filtering"""
     try:
-        query = db.query(Route)
+        query = select(Route)
         
         if status:
-            query = query.filter(Route.status == status)
+            query = query.where(Route.status == status)
         if vehicle_id:
-            query = query.filter(Route.vehicle_id == vehicle_id)
+            query = query.where(Route.vehicle_id == vehicle_id)
         
-        routes = query.offset(offset).limit(limit).all()
+        result = await db.execute(query.offset(offset).limit(limit))
+        routes = result.scalars().all()
         
         return {
             "routes": [
@@ -119,14 +123,15 @@ async def get_routes(
             "total": len(routes)
         }
     except Exception as e:
-        logger.error("Failed to get routes", error=str(e))
+        logger.error(f"Failed to get routes: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/routes/{route_id}")
-async def get_route(route_id: str, db: Session = Depends(get_db)):
+async def get_route(route_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific route details"""
     try:
-        route = db.query(Route).filter(Route.route_id == route_id).first()
+        result = await db.execute(select(Route).where(Route.route_id == route_id))
+        route = result.scalar_one_or_none()
         if not route:
             raise HTTPException(status_code=404, detail="Route not found")
         
@@ -151,17 +156,24 @@ async def get_route(route_id: str, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get route {route_id}", error=str(e))
+        logger.error(f"Failed to get route {route_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/summary")
-async def get_fleet_summary(db: Session = Depends(get_db)):
+async def get_fleet_summary(db: AsyncSession = Depends(get_db)):
     """Get fleet summary statistics"""
     try:
-        total_vehicles = db.query(Vehicle).count()
-        available_vehicles = db.query(Vehicle).filter(Vehicle.status == "available").count()
-        active_routes = db.query(Route).filter(Route.status.in_(["planned", "in_progress"])).count()
-        completed_deliveries = db.query(Delivery).filter(Delivery.status == "completed").count()
+        result = await db.execute(select(func.count(Vehicle.vehicle_id)))
+        total_vehicles = result.scalar()
+        
+        result = await db.execute(select(func.count(Vehicle.vehicle_id)).where(Vehicle.status == "available"))
+        available_vehicles = result.scalar()
+        
+        result = await db.execute(select(func.count(Route.route_id)).where(Route.status.in_(["planned", "in_progress"])))
+        active_routes = result.scalar()
+        
+        result = await db.execute(select(func.count(Delivery.delivery_id)).where(Delivery.status == "completed"))
+        completed_deliveries = result.scalar()
         
         return {
             "total_vehicles": total_vehicles,
@@ -171,5 +183,5 @@ async def get_fleet_summary(db: Session = Depends(get_db)):
             "completed_deliveries": completed_deliveries
         }
     except Exception as e:
-        logger.error("Failed to get fleet summary", error=str(e))
+        logger.error(f"Failed to get fleet summary: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

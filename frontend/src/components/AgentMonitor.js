@@ -47,10 +47,11 @@ const AgentMonitor = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'active': return 'text-green-600 bg-green-100';
-      case 'idle': return 'text-yellow-600 bg-yellow-100';
+      case 'running': return 'text-green-600 bg-green-100';
+      case 'stopped': return 'text-gray-600 bg-gray-100';
+      case 'starting': return 'text-blue-600 bg-blue-100';
+      case 'stopping': return 'text-yellow-600 bg-yellow-100';
       case 'error': return 'text-red-600 bg-red-100';
-      case 'offline': return 'text-gray-600 bg-gray-100';
       default: return 'text-gray-600 bg-gray-100';
     }
   };
@@ -100,7 +101,7 @@ const AgentMonitor = () => {
                     <div className="mt-3 flex space-x-2">
                       <button
                         onClick={() => controlAgent(agent.agent_id, 'start')}
-                        disabled={agent.status === 'active'}
+                        disabled={agent.status === 'running'}
                         className="flex items-center px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                       >
                         <Play className="h-3 w-3 mr-1" />
@@ -108,7 +109,7 @@ const AgentMonitor = () => {
                       </button>
                       <button
                         onClick={() => controlAgent(agent.agent_id, 'stop')}
-                        disabled={agent.status === 'offline'}
+                        disabled={agent.status === 'stopped'}
                         className="flex items-center px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
                       >
                         <Square className="h-3 w-3 mr-1" />

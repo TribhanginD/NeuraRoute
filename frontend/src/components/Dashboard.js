@@ -147,7 +147,7 @@ const Dashboard = () => {
         />
         <StatCard
           icon={Users}
-          title="Active Agents"
+          title="Running Agents"
           value={stats.agentsActive}
           color="bg-orange-500"
         />
@@ -182,7 +182,7 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">AI Agents</span>
-              <span className="text-sm text-green-600">Active</span>
+              <span className="text-sm text-green-600">Running</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Forecasting Engine</span>

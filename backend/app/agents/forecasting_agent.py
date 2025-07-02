@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.base_agent import BaseAgent
 from app.models.inventory import SKU, Location
-from app.models.forecasting import Forecast
+from app.models.forecasting import DemandForecast
 from app.forecasting.engine import DemandForecastingEngine
 from app.core.database import get_db
 
@@ -172,10 +172,10 @@ class ForecastingAgent(BaseAgent):
         db = next(get_db())
         
         try:
-            forecast = db.query(Forecast).filter(
-                Forecast.sku_id == sku_id,
-                Forecast.location_id == location_id
-            ).order_by(Forecast.forecast_date.desc()).first()
+            forecast = db.query(DemandForecast).filter(
+                DemandForecast.sku_id == sku_id,
+                DemandForecast.location_id == location_id
+            ).order_by(DemandForecast.forecast_date.desc()).first()
             
             if forecast:
                 return {
@@ -231,8 +231,8 @@ class ForecastingAgent(BaseAgent):
         
         try:
             # Get recent forecasts
-            recent_forecasts = db.query(Forecast).filter(
-                Forecast.forecast_date >= datetime.utcnow() - timedelta(days=1)
+            recent_forecasts = db.query(DemandForecast).filter(
+                DemandForecast.forecast_date >= datetime.utcnow() - timedelta(days=1)
             ).all()
             
             for forecast in recent_forecasts:
@@ -359,8 +359,8 @@ class ForecastingAgent(BaseAgent):
         try:
             # Get forecasts from the specified period
             start_date = datetime.utcnow() - timedelta(days=days_back)
-            forecasts = db.query(Forecast).filter(
-                Forecast.forecast_date >= start_date
+            forecasts = db.query(DemandForecast).filter(
+                DemandForecast.forecast_date >= start_date
             ).all()
             
             if not forecasts:

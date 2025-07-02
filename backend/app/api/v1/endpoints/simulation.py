@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 import structlog
 
 from app.core.database import get_db
-from app.models.simulation import SimulationState, SimulationTick
+from app.models.simulation import SimulationState, SimulationEvent
 from app.simulation.engine import SimulationEngine
 
 logger = structlog.get_logger()
@@ -92,21 +92,23 @@ async def get_simulation_ticks(
 ):
     """Get simulation tick history"""
     try:
-        ticks = db.query(SimulationTick).order_by(
-            SimulationTick.tick_number.desc()
+        events = db.query(SimulationEvent).filter(
+            SimulationEvent.event_type == 'tick_end'
+        ).order_by(
+            SimulationEvent.tick_number.desc()
         ).offset(offset).limit(limit).all()
         
         return {
             "ticks": [
                 {
-                    "tick_number": tick.tick_number,
-                    "timestamp": tick.timestamp.isoformat(),
-                    "simulation_time": tick.simulation_time.isoformat(),
-                    "agents_active": tick.agents_active,
-                    "events_processed": tick.events_processed
-                } for tick in ticks
+                    "tick_number": event.tick_number,
+                    "timestamp": event.timestamp.isoformat(),
+                    "simulation_time": event.event_data.get('simulation_time'),
+                    "agents_active": event.event_data.get('agents_active', 0),
+                    "events_processed": event.event_data.get('events_processed', 0)
+                } for event in events
             ],
-            "total": len(ticks)
+            "total": len(events)
         }
     except Exception as e:
         logger.error("Failed to get simulation ticks", error=str(e))
@@ -117,21 +119,18 @@ async def get_simulation_state(db: Session = Depends(get_db)):
     """Get current simulation state"""
     try:
         state = db.query(SimulationState).order_by(
-            SimulationState.timestamp.desc()
+            SimulationState.created_at.desc()
         ).first()
         
         if not state:
             return {"message": "No simulation state found"}
         
         return {
-            "timestamp": state.timestamp.isoformat(),
-            "simulation_time": state.simulation_time.isoformat(),
-            "tick_number": state.tick_number,
-            "active_orders": state.active_orders,
-            "active_deliveries": state.active_deliveries,
-            "available_vehicles": state.available_vehicles,
-            "total_inventory_items": state.total_inventory_items,
-            "system_health": state.system_health
+            "timestamp": state.created_at.isoformat(),
+            "current_tick": state.current_tick,
+            "status": state.status,
+            "speed_multiplier": state.speed_multiplier,
+            "config": state.config
         }
     except Exception as e:
         logger.error("Failed to get simulation state", error=str(e))

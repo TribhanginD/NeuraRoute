@@ -4,13 +4,165 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 import uuid
+import json
 
 from app.agents.base_agent import BaseAgent
 from app.models.inventory import SKU
-from app.models.forecasting import Forecast
+from app.models.forecasting import DemandForecast
 from app.core.database import get_db
+from app.ai.model_manager import get_ai_model_manager
 
 logger = structlog.get_logger()
+
+class PricingEngine:
+    """AI-powered pricing engine for dynamic pricing decisions"""
+    
+    def __init__(self):
+        self.ai_manager = None
+        self.pricing_cache = {}
+    
+    async def initialize(self):
+        """Initialize the pricing engine"""
+        logger.info("Initializing Pricing Engine")
+        
+        # Initialize AI model manager
+        self.ai_manager = await get_ai_model_manager()
+        
+        logger.info("Pricing Engine initialized successfully")
+    
+    async def calculate_optimal_price(
+        self,
+        sku: SKU,
+        current_demand: float,
+        forecasted_demand: float,
+        competitor_prices: Dict[str, float],
+        market_conditions: Dict[str, Any],
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Calculate optimal price using AI reasoning"""
+        
+        # Create system message for pricing
+        system_message = """You are an expert pricing analyst for a hyperlocal logistics system.
+        Your task is to determine the optimal price for products based on market conditions, demand, and competition.
+        
+        Consider factors like:
+        - Current and forecasted demand
+        - Competitor pricing
+        - Market conditions
+        - Product costs and margins
+        - Seasonal factors
+        - Inventory levels
+        
+        Provide your response in JSON format with the following structure:
+        {
+            "optimal_price": <number>,
+            "price_change_percentage": <number>,
+            "reasoning": "<detailed explanation of your pricing decision>",
+            "confidence": <number between 0 and 1>,
+            "risk_level": "<low/medium/high>"
+        }"""
+        
+        # Create prompt
+        prompt = f"""
+        Please calculate the optimal price for the following product:
+        
+        Product: {sku.name} ({sku.sku_code})
+        Category: {sku.category}
+        Current Price: ${sku.price}
+        Cost: ${sku.cost}
+        Current Demand: {current_demand}
+        Forecasted Demand: {forecasted_demand}
+        
+        Competitor Prices:
+        {json.dumps(competitor_prices, indent=2)}
+        
+        Market Conditions:
+        {json.dumps(market_conditions, indent=2)}
+        
+        Additional Context:
+        {json.dumps(kwargs, indent=2)}
+        
+        Provide your response in JSON format as specified in the system message.
+        """
+        
+        try:
+            # Generate response using AI model manager
+            response = await self.ai_manager.generate_response(
+                prompt=prompt,
+                system_message=system_message,
+                model="gpt-4o",  # Use specific pricing model
+                provider="openai"
+            )
+            
+            # Parse JSON response
+            try:
+                result = json.loads(response["content"])
+                return {
+                    "optimal_price": float(result["optimal_price"]),
+                    "price_change_percentage": float(result["price_change_percentage"]),
+                    "reasoning": result["reasoning"],
+                    "confidence": float(result["confidence"]),
+                    "risk_level": result["risk_level"],
+                    "model": response["model"],
+                    "provider": response["provider"]
+                }
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error("Failed to parse AI pricing response", error=str(e))
+                return await self._calculate_fallback_price(
+                    sku, current_demand, forecasted_demand, competitor_prices, market_conditions
+                )
+                
+        except Exception as e:
+            logger.error("AI pricing calculation failed", error=str(e))
+            return await self._calculate_fallback_price(
+                sku, current_demand, forecasted_demand, competitor_prices, market_conditions
+            )
+    
+    async def _calculate_fallback_price(
+        self,
+        sku: SKU,
+        current_demand: float,
+        forecasted_demand: float,
+        competitor_prices: Dict[str, float],
+        market_conditions: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Calculate fallback price using simple heuristics"""
+        
+        # Base price from cost and markup
+        base_markup = 0.15  # 15% markup
+        base_price = sku.cost * (1 + base_markup)
+        
+        # Adjust for demand
+        demand_factor = forecasted_demand / current_demand if current_demand > 0 else 1.0
+        demand_adjustment = min(max(demand_factor, 0.8), 1.2)  # Limit adjustment to ±20%
+        
+        # Adjust for competition
+        if competitor_prices:
+            avg_competitor_price = sum(competitor_prices.values()) / len(competitor_prices)
+            competition_factor = avg_competitor_price / sku.price if sku.price > 0 else 1.0
+            competition_adjustment = min(max(competition_factor, 0.9), 1.1)  # Limit to ±10%
+        else:
+            competition_adjustment = 1.0
+        
+        # Calculate optimal price
+        optimal_price = base_price * demand_adjustment * competition_adjustment
+        
+        # Calculate price change
+        price_change_percentage = ((optimal_price - sku.price) / sku.price) * 100 if sku.price > 0 else 0
+        
+        return {
+            "optimal_price": optimal_price,
+            "price_change_percentage": price_change_percentage,
+            "reasoning": f"Fallback pricing: base_price={base_price}, demand_adjustment={demand_adjustment}, competition_adjustment={competition_adjustment}",
+            "confidence": 0.6,
+            "risk_level": "medium",
+            "model": "fallback",
+            "provider": "heuristic"
+        }
+    
+    def clear_cache(self):
+        """Clear pricing cache"""
+        self.pricing_cache.clear()
 
 class PricingAgent(BaseAgent):
     """Autonomous agent for dynamic pricing decisions"""
@@ -19,11 +171,12 @@ class PricingAgent(BaseAgent):
         """Initialize pricing agent specific components"""
         logger.info("Initializing Pricing Agent components")
         
-        # Load pricing strategies and market data
-        await self._load_pricing_config()
-        
         # Initialize pricing engine
         self.pricing_engine = PricingEngine()
+        await self.pricing_engine.initialize()
+        
+        # Load pricing strategies and market data
+        await self._load_pricing_config()
         
         logger.info("Pricing Agent components initialized")
     
@@ -36,659 +189,276 @@ class PricingAgent(BaseAgent):
         
         logger.info("Pricing Agent components stopped")
     
-    async def _run_cycle_logic(self):
-        """Run pricing agent cycle logic"""
-        logger.debug("Running Pricing Agent cycle", agent_id=self.agent_id)
-        
-        try:
-            # Get all active SKUs
-            active_skus = await self._get_active_skus()
-            
-            # Get market conditions
-            market_conditions = await self._get_market_conditions()
-            
-            # Generate pricing recommendations
-            pricing_recommendations = []
-            for sku in active_skus:
-                recommendation = await self._generate_pricing_recommendation(sku, market_conditions)
-                if recommendation:
-                    pricing_recommendations.append(recommendation)
-            
-            # Execute pricing changes
-            for recommendation in pricing_recommendations:
-                await self._execute_pricing_change(recommendation)
-            
-            # Update pricing strategies
-            await self._update_pricing_strategies()
-            
-            # Store cycle results in memory
-            await self._store_memory("cycle", f"cycle_{self.cycle_count}", {
-                "timestamp": datetime.utcnow().isoformat(),
-                "active_skus": len(active_skus),
-                "recommendations_generated": len(pricing_recommendations),
-                "cycle_duration_ms": self.average_response_time
-            })
-            
-            self.tasks_completed += 1
-            
-        except Exception as e:
-            logger.error("Error in Pricing Agent cycle", agent_id=self.agent_id, error=str(e))
-            self.tasks_failed += 1
-            raise
-    
-    async def _execute_action(self, action: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute pricing agent specific actions"""
-        
-        if action == "analyze_pricing":
-            sku_ids = parameters.get("sku_ids", [])
-            return await self._analyze_pricing_for_skus(sku_ids)
-        
-        elif action == "update_prices":
-            price_updates = parameters.get("price_updates", [])
-            return await self._update_multiple_prices(price_updates)
-        
-        elif action == "get_competitor_prices":
-            sku_ids = parameters.get("sku_ids", [])
-            return await self._get_competitor_prices(sku_ids)
-        
-        elif action == "optimize_pricing_strategy":
-            sku_id = parameters.get("sku_id")
-            return await self._optimize_pricing_strategy(sku_id)
-        
-        else:
-            raise ValueError(f"Unknown action: {action}")
-    
-    async def _get_active_skus(self) -> List[Dict[str, Any]]:
-        """Get all active SKUs for pricing analysis"""
-        db = next(get_db())
-        
-        try:
-            skus = db.query(SKU).filter(SKU.is_active == True).all()
-            
-            active_skus = []
-            for sku in skus:
-                active_skus.append({
-                    "sku_id": sku.id,
-                    "sku_code": sku.sku_code,
-                    "name": sku.name,
-                    "category": sku.category,
-                    "base_price": sku.base_price,
-                    "current_price": sku.base_price,  # For MVP, assume base price is current
-                    "unit": sku.unit
-                })
-            
-            return active_skus
-            
-        finally:
-            db.close()
-    
-    async def _get_market_conditions(self) -> Dict[str, Any]:
-        """Get current market conditions"""
-        
-        # In a real system, this would fetch real market data
-        # For MVP, simulate market conditions
-        
-        market_conditions = {
-            "demand_level": "medium",  # low, medium, high
-            "competition_level": "medium",  # low, medium, high
-            "seasonal_factor": 1.0,
-            "economic_indicator": "stable",  # growing, stable, declining
-            "inflation_rate": 0.02,  # 2% inflation
-            "competitor_prices": {
-                "competitor_1": {"price_factor": 1.1, "market_share": 0.3},
-                "competitor_2": {"price_factor": 0.95, "market_share": 0.25},
-                "competitor_3": {"price_factor": 1.05, "market_share": 0.2}
-            }
-        }
-        
-        return market_conditions
-    
-    async def _generate_pricing_recommendation(self, sku: Dict[str, Any], market_conditions: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate pricing recommendation for a SKU"""
-        
-        try:
-            # Get demand forecast for this SKU
-            forecast = await self._get_demand_forecast(sku["sku_id"])
-            
-            # Calculate optimal price using pricing engine
-            pricing_result = self.pricing_engine.calculate_optimal_price(
-                sku=sku,
-                market_conditions=market_conditions,
-                forecast=forecast
-            )
-            
-            if pricing_result["price_change_needed"]:
-                recommendation = {
-                    "sku_id": sku["sku_id"],
-                    "sku_code": sku["sku_code"],
-                    "current_price": sku["current_price"],
-                    "recommended_price": pricing_result["optimal_price"],
-                    "price_change_percent": pricing_result["price_change_percent"],
-                    "reasoning": pricing_result["reasoning"],
-                    "confidence": pricing_result["confidence"],
-                    "expected_impact": pricing_result["expected_impact"]
-                }
-                
-                return recommendation
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Failed to generate pricing recommendation for SKU {sku['sku_code']}", error=str(e))
-            return None
-    
-    async def _get_demand_forecast(self, sku_id: int) -> Dict[str, Any]:
-        """Get demand forecast for pricing decisions"""
-        db = next(get_db())
-        
-        try:
-            # Get most recent forecast
-            forecast = db.query(Forecast).filter(
-                Forecast.sku_id == sku_id
-            ).order_by(Forecast.forecast_date.desc()).first()
-            
-            if forecast:
-                return {
-                    "predicted_demand": forecast.predicted_demand,
-                    "confidence_lower": forecast.confidence_lower,
-                    "confidence_upper": forecast.confidence_upper,
-                    "trend": "stable"  # For MVP, assume stable trend
-                }
-            else:
-                # Fallback to basic demand estimation
-                return {
-                    "predicted_demand": 10.0,
-                    "confidence_lower": 5.0,
-                    "confidence_upper": 15.0,
-                    "trend": "stable"
-                }
-                
-        finally:
-            db.close()
-    
-    async def _execute_pricing_change(self, recommendation: Dict[str, Any]):
-        """Execute a pricing change"""
-        
-        try:
-            # Log the pricing action
-            await self._log_action(
-                task_id=str(uuid.uuid4()),
-                action="update_price",
-                input_data=recommendation,
-                status="completed",
-                reasoning=recommendation["reasoning"]
-            )
-            
-            # Store pricing decision in memory
-            await self._store_memory("pricing_decision", f"decision_{datetime.utcnow().timestamp()}", {
-                "recommendation": recommendation,
-                "timestamp": datetime.utcnow().isoformat(),
-                "status": "executed"
-            })
-            
-            # Update SKU price in database
-            await self._update_sku_price(recommendation)
-            
-            logger.info(
-                f"Price updated for {recommendation['sku_code']}",
-                old_price=recommendation["current_price"],
-                new_price=recommendation["recommended_price"],
-                change_percent=recommendation["price_change_percent"]
-            )
-            
-        except Exception as e:
-            logger.error(f"Failed to execute pricing change", error=str(e))
-            raise
-    
-    async def _update_sku_price(self, recommendation: Dict[str, Any]):
-        """Update SKU price in database"""
-        db = next(get_db())
-        
-        try:
-            sku = db.query(SKU).filter(SKU.id == recommendation["sku_id"]).first()
-            if sku:
-                sku.base_price = recommendation["recommended_price"]
-                db.commit()
-                
-                logger.info(f"SKU price updated", 
-                           sku_code=sku.sku_code,
-                           new_price=recommendation["recommended_price"])
-            
-        except Exception as e:
-            logger.error("Failed to update SKU price", error=str(e))
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    
     async def _load_pricing_config(self):
         """Load pricing configuration"""
         self.pricing_config = {
-            "elasticity_threshold": 0.1,  # Price elasticity threshold
-            "max_price_change": 0.2,  # Maximum 20% price change
-            "min_price_change": 0.02,  # Minimum 2% price change
-            "competitor_weight": 0.3,  # Weight for competitor prices
-            "demand_weight": 0.4,  # Weight for demand forecast
-            "cost_weight": 0.3  # Weight for cost considerations
+            "price_check_interval": self.config.get("price_check_interval", 1800),  # 30 minutes
+            "competitor_check_interval": self.config.get("competitor_check_interval", 3600),  # 1 hour
+            "max_price_change": self.config.get("max_price_change", 0.2),  # 20%
+            "min_price_change": self.config.get("min_price_change", 0.05),  # 5%
+            "confidence_threshold": self.config.get("confidence_threshold", 0.7)
         }
     
-    async def _update_pricing_strategies(self):
-        """Update pricing strategies based on performance"""
-        # In a real system, this would analyze pricing performance and adjust strategies
-        pass
-    
-    async def _analyze_pricing_for_skus(self, sku_ids: List[int]) -> Dict[str, Any]:
-        """Analyze pricing for specific SKUs"""
-        
-        analysis_results = []
-        
-        for sku_id in sku_ids:
-            try:
-                db = next(get_db())
-                sku = db.query(SKU).filter(SKU.id == sku_id).first()
-                
-                if sku:
-                    sku_data = {
-                        "sku_id": sku.id,
-                        "sku_code": sku.sku_code,
-                        "name": sku.name,
-                        "current_price": sku.base_price
-                    }
-                    
-                    # Get market conditions
-                    market_conditions = await self._get_market_conditions()
-                    
-                    # Get demand forecast
-                    forecast = await self._get_demand_forecast(sku_id)
-                    
-                    # Analyze pricing
-                    analysis = self.pricing_engine.analyze_pricing(
-                        sku=sku_data,
-                        market_conditions=market_conditions,
-                        forecast=forecast
-                    )
-                    
-                    analysis_results.append(analysis)
-                
-                db.close()
-                
-            except Exception as e:
-                logger.error(f"Failed to analyze pricing for SKU {sku_id}", error=str(e))
-        
-        return {
-            "analysis_results": analysis_results,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    
-    async def _update_multiple_prices(self, price_updates: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Update multiple prices at once"""
-        
-        results = []
-        
-        for update in price_updates:
-            try:
-                sku_id = update["sku_id"]
-                new_price = update["new_price"]
-                reasoning = update.get("reasoning", "Bulk price update")
-                
-                # Update price
-                db = next(get_db())
-                sku = db.query(SKU).filter(SKU.id == sku_id).first()
-                
-                if sku:
-                    old_price = sku.base_price
-                    sku.base_price = new_price
-                    db.commit()
-                    
-                    results.append({
-                        "sku_id": sku_id,
-                        "sku_code": sku.sku_code,
-                        "old_price": old_price,
-                        "new_price": new_price,
-                        "success": True
-                    })
-                
-                db.close()
-                
-            except Exception as e:
-                logger.error(f"Failed to update price for SKU {sku_id}", error=str(e))
-                results.append({
-                    "sku_id": sku_id,
-                    "success": False,
-                    "error": str(e)
-                })
-        
-        return {
-            "results": results,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    
-    async def _get_competitor_prices(self, sku_ids: List[int]) -> Dict[str, Any]:
-        """Get competitor prices for specific SKUs"""
-        
-        # In a real system, this would fetch real competitor data
-        # For MVP, simulate competitor prices
-        
-        competitor_prices = {}
-        
-        for sku_id in sku_ids:
-            db = next(get_db())
-            sku = db.query(SKU).filter(SKU.id == sku_id).first()
-            
-            if sku:
-                # Simulate competitor prices
-                base_price = sku.base_price
-                competitor_prices[sku_id] = {
-                    "sku_code": sku.sku_code,
-                    "our_price": base_price,
-                    "competitors": {
-                        "competitor_1": base_price * 1.1,
-                        "competitor_2": base_price * 0.95,
-                        "competitor_3": base_price * 1.05
-                    },
-                    "market_position": "competitive"
-                }
-            
-            db.close()
-        
-        return {
-            "competitor_prices": competitor_prices,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    
-    async def _optimize_pricing_strategy(self, sku_id: int) -> Dict[str, Any]:
-        """Optimize pricing strategy for a specific SKU"""
-        
+    async def _run_cycle_logic(self):
+        """Run pricing agent cycle logic"""
         try:
-            db = next(get_db())
-            sku = db.query(SKU).filter(SKU.id == sku_id).first()
+            # Check if it's time for pricing analysis
+            if await self._should_run_pricing_analysis():
+                await self._run_pricing_analysis()
             
+            # Check if it's time for competitor analysis
+            if await self._should_run_competitor_analysis():
+                await self._run_competitor_analysis()
+            
+            # Update pricing metrics
+            await self._update_pricing_metrics()
+            
+        except Exception as e:
+            logger.error("Pricing agent cycle failed", error=str(e))
+            await self._log_action(
+                task_id=str(uuid.uuid4()),
+                action="pricing_cycle",
+                input_data={},
+                status="failed",
+                error_message=str(e)
+            )
+    
+    async def _should_run_pricing_analysis(self) -> bool:
+        """Check if pricing analysis should run"""
+        last_pricing = self.memory.get("last_pricing_analysis")
+        if not last_pricing:
+            return True
+        
+        last_time = datetime.fromisoformat(last_pricing)
+        interval = timedelta(seconds=self.pricing_config["price_check_interval"])
+        return datetime.utcnow() - last_time >= interval
+    
+    async def _should_run_competitor_analysis(self) -> bool:
+        """Check if competitor analysis should run"""
+        last_competitor = self.memory.get("last_competitor_analysis")
+        if not last_competitor:
+            return True
+        
+        last_time = datetime.fromisoformat(last_competitor)
+        interval = timedelta(seconds=self.pricing_config["competitor_check_interval"])
+        return datetime.utcnow() - last_time >= interval
+    
+    async def _run_pricing_analysis(self):
+        """Run comprehensive pricing analysis"""
+        logger.info("Running pricing analysis")
+        
+        db = next(get_db())
+        try:
+            # Get all active SKUs
+            skus = db.query(SKU).filter(SKU.is_active == True).all()
+            
+            for sku in skus:
+                await self._analyze_sku_pricing(sku, db)
+            
+            # Update last pricing analysis time
+            await self._store_memory("last_pricing_analysis", datetime.utcnow().isoformat())
+            
+            logger.info(f"Completed pricing analysis for {len(skus)} SKUs")
+            
+        except Exception as e:
+            logger.error("Pricing analysis failed", error=str(e))
+            raise
+        finally:
+            db.close()
+    
+    async def _analyze_sku_pricing(self, sku: SKU, db: Session):
+        """Analyze pricing for a specific SKU"""
+        try:
+            # Get current demand data
+            current_demand = await self._get_current_demand(sku.id, db)
+            
+            # Get forecasted demand
+            forecasted_demand = await self._get_forecasted_demand(sku.id, db)
+            
+            # Get competitor prices
+            competitor_prices = await self._get_competitor_prices(sku, db)
+            
+            # Get market conditions
+            market_conditions = await self._get_market_conditions(db)
+            
+            # Calculate optimal price
+            pricing_result = await self.pricing_engine.calculate_optimal_price(
+                sku=sku,
+                current_demand=current_demand,
+                forecasted_demand=forecasted_demand,
+                competitor_prices=competitor_prices,
+                market_conditions=market_conditions
+            )
+            
+            # Apply price change if within thresholds
+            if self._should_apply_price_change(pricing_result):
+                await self._apply_price_change(sku, pricing_result, db)
+            
+            # Log pricing decision
+            await self._log_action(
+                task_id=str(uuid.uuid4()),
+                action="pricing_analysis",
+                input_data={
+                    "sku_id": sku.id,
+                    "current_price": sku.price,
+                    "current_demand": current_demand,
+                    "forecasted_demand": forecasted_demand
+                },
+                status="completed",
+                output_data=pricing_result,
+                reasoning=pricing_result.get("reasoning", "")
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to analyze pricing for SKU {sku.id}", error=str(e))
+    
+    async def _get_current_demand(self, sku_id: int, db: Session) -> float:
+        """Get current demand for SKU"""
+        # In a real system, this would query recent order data
+        # For MVP, return simulated demand
+        import random
+        return random.uniform(10, 100)
+    
+    async def _get_forecasted_demand(self, sku_id: int, db: Session) -> float:
+        """Get forecasted demand for SKU"""
+        # Get the most recent forecast
+        forecast = db.query(DemandForecast).filter(
+            DemandForecast.sku_id == sku_id
+        ).order_by(DemandForecast.forecast_date.desc()).first()
+        
+        if forecast:
+            return forecast.predicted_demand
+        else:
+            return 50.0  # Default forecast
+    
+    async def _get_competitor_prices(self, sku: SKU, db: Session) -> Dict[str, float]:
+        """Get competitor prices for SKU"""
+        # In a real system, this would query competitor price data
+        # For MVP, return simulated competitor prices
+        import random
+        return {
+            "competitor_1": sku.price * random.uniform(0.8, 1.2),
+            "competitor_2": sku.price * random.uniform(0.8, 1.2),
+            "competitor_3": sku.price * random.uniform(0.8, 1.2)
+        }
+    
+    async def _get_market_conditions(self, db: Session) -> Dict[str, Any]:
+        """Get current market conditions"""
+        # In a real system, this would query market data APIs
+        # For MVP, return simulated market conditions
+        import random
+        return {
+            "economic_indicator": random.choice(["growing", "stable", "declining"]),
+            "consumer_confidence": random.uniform(60, 90),
+            "market_volatility": random.uniform(0.1, 0.3),
+            "competition_level": random.choice(["low", "medium", "high"])
+        }
+    
+    def _should_apply_price_change(self, pricing_result: Dict[str, Any]) -> bool:
+        """Check if price change should be applied"""
+        price_change = abs(pricing_result.get("price_change_percentage", 0))
+        confidence = pricing_result.get("confidence", 0)
+        
+        return (
+            price_change >= self.pricing_config["min_price_change"] and
+            price_change <= self.pricing_config["max_price_change"] and
+            confidence >= self.pricing_config["confidence_threshold"]
+        )
+    
+    async def _apply_price_change(self, sku: SKU, pricing_result: Dict[str, Any], db: Session):
+        """Apply price change to SKU"""
+        new_price = pricing_result["optimal_price"]
+        
+        # Update SKU price
+        sku.price = new_price
+        sku.updated_at = datetime.utcnow()
+        
+        db.commit()
+        
+        logger.info(f"Updated price for SKU {sku.id} to ${new_price:.2f}")
+    
+    async def _run_competitor_analysis(self):
+        """Run competitor pricing analysis"""
+        logger.info("Running competitor analysis")
+        
+        # Update last competitor analysis time
+        await self._store_memory("last_competitor_analysis", datetime.utcnow().isoformat())
+        
+        logger.info("Completed competitor analysis")
+    
+    async def _update_pricing_metrics(self):
+        """Update pricing performance metrics"""
+        # Update agent metrics
+        self.tasks_completed += 1
+        self.last_heartbeat = datetime.utcnow()
+    
+    async def _execute_action(self, action: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute pricing agent specific action"""
+        if action == "analyze_pricing":
+            return await self._execute_pricing_analysis(parameters)
+        elif action == "get_pricing_recommendations":
+            return await self._get_pricing_recommendations(parameters)
+        else:
+            raise ValueError(f"Unknown action: {action}")
+    
+    async def _execute_pricing_analysis(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute pricing analysis for specific parameters"""
+        sku_id = parameters.get("sku_id")
+        if not sku_id:
+            raise ValueError("sku_id is required for pricing analysis")
+        
+        db = next(get_db())
+        try:
+            sku = db.query(SKU).filter(SKU.id == sku_id).first()
             if not sku:
                 raise ValueError(f"SKU {sku_id} not found")
             
-            sku_data = {
-                "sku_id": sku.id,
-                "sku_code": sku.sku_code,
-                "name": sku.name,
-                "current_price": sku.base_price
-            }
+            await self._analyze_sku_pricing(sku, db)
             
-            # Get market conditions and forecast
-            market_conditions = await self._get_market_conditions()
-            forecast = await self._get_demand_forecast(sku_id)
+            return {"status": "completed", "sku_id": sku_id}
             
-            # Optimize pricing strategy
-            optimization_result = self.pricing_engine.optimize_strategy(
-                sku=sku_data,
-                market_conditions=market_conditions,
-                forecast=forecast
-            )
-            
+        finally:
             db.close()
+    
+    async def _get_pricing_recommendations(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Get pricing recommendations for SKUs"""
+        db = next(get_db())
+        try:
+            skus = db.query(SKU).filter(SKU.is_active == True).all()
+            
+            recommendations = []
+            for sku in skus:
+                # Get basic pricing data
+                current_demand = await self._get_current_demand(sku.id, db)
+                forecasted_demand = await self._get_forecasted_demand(sku.id, db)
+                competitor_prices = await self._get_competitor_prices(sku, db)
+                market_conditions = await self._get_market_conditions(db)
+                
+                # Calculate optimal price
+                pricing_result = await self.pricing_engine.calculate_optimal_price(
+                    sku=sku,
+                    current_demand=current_demand,
+                    forecasted_demand=forecasted_demand,
+                    competitor_prices=competitor_prices,
+                    market_conditions=market_conditions
+                )
+                
+                recommendations.append({
+                    "sku_id": sku.id,
+                    "sku_name": sku.name,
+                    "current_price": sku.price,
+                    "recommended_price": pricing_result["optimal_price"],
+                    "price_change_percentage": pricing_result["price_change_percentage"],
+                    "confidence": pricing_result["confidence"],
+                    "risk_level": pricing_result["risk_level"],
+                    "reasoning": pricing_result["reasoning"]
+                })
             
             return {
-                "sku_id": sku_id,
-                "sku_code": sku.sku_code,
-                "current_strategy": optimization_result["current_strategy"],
-                "recommended_strategy": optimization_result["recommended_strategy"],
-                "expected_improvement": optimization_result["expected_improvement"],
-                "implementation_steps": optimization_result["implementation_steps"],
-                "timestamp": datetime.utcnow().isoformat()
+                "status": "completed",
+                "recommendations": recommendations,
+                "total_skus": len(skus)
             }
             
-        except Exception as e:
-            logger.error(f"Failed to optimize pricing strategy for SKU {sku_id}", error=str(e))
-            raise
-
-
-class PricingEngine:
-    """Engine for pricing calculations and optimization"""
-    
-    def __init__(self):
-        self.pricing_cache = {}
-        self.elasticity_data = {}
-    
-    def calculate_optimal_price(
-        self,
-        sku: Dict[str, Any],
-        market_conditions: Dict[str, Any],
-        forecast: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Calculate optimal price for a SKU"""
-        
-        current_price = sku["current_price"]
-        
-        # Calculate price factors
-        demand_factor = self._calculate_demand_factor(forecast)
-        competition_factor = self._calculate_competition_factor(market_conditions)
-        cost_factor = self._calculate_cost_factor(sku)
-        
-        # Calculate optimal price
-        optimal_price = current_price * demand_factor * competition_factor * cost_factor
-        
-        # Apply constraints
-        max_change = current_price * 1.2  # Max 20% increase
-        min_change = current_price * 0.8  # Max 20% decrease
-        
-        optimal_price = max(min_change, min(max_change, optimal_price))
-        
-        # Calculate price change
-        price_change_percent = ((optimal_price - current_price) / current_price) * 100
-        
-        # Determine if change is needed
-        price_change_needed = abs(price_change_percent) >= 2.0  # Minimum 2% change
-        
-        # Generate reasoning
-        reasoning = self._generate_pricing_reasoning(
-            sku, market_conditions, forecast, price_change_percent
-        )
-        
-        return {
-            "optimal_price": optimal_price,
-            "price_change_percent": price_change_percent,
-            "price_change_needed": price_change_needed,
-            "reasoning": reasoning,
-            "confidence": 0.85,  # For MVP, assume 85% confidence
-            "expected_impact": self._calculate_expected_impact(price_change_percent, forecast)
-        }
-    
-    def analyze_pricing(
-        self,
-        sku: Dict[str, Any],
-        market_conditions: Dict[str, Any],
-        forecast: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Analyze current pricing strategy"""
-        
-        current_price = sku["current_price"]
-        
-        # Calculate various metrics
-        price_elasticity = self._calculate_price_elasticity(sku, forecast)
-        market_position = self._analyze_market_position(sku, market_conditions)
-        profitability = self._calculate_profitability(sku, current_price)
-        
-        return {
-            "sku_id": sku["sku_id"],
-            "sku_code": sku["sku_code"],
-            "current_price": current_price,
-            "price_elasticity": price_elasticity,
-            "market_position": market_position,
-            "profitability": profitability,
-            "recommendations": self._generate_analysis_recommendations(
-                price_elasticity, market_position, profitability
-            )
-        }
-    
-    def optimize_strategy(
-        self,
-        sku: Dict[str, Any],
-        market_conditions: Dict[str, Any],
-        forecast: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Optimize pricing strategy"""
-        
-        # For MVP, provide basic strategy recommendations
-        # In production, this would use sophisticated optimization algorithms
-        
-        current_strategy = "standard_pricing"
-        
-        # Determine optimal strategy based on market conditions
-        if market_conditions["demand_level"] == "high" and market_conditions["competition_level"] == "low":
-            recommended_strategy = "premium_pricing"
-        elif market_conditions["demand_level"] == "low" and market_conditions["competition_level"] == "high":
-            recommended_strategy = "penetration_pricing"
-        else:
-            recommended_strategy = "competitive_pricing"
-        
-        return {
-            "current_strategy": current_strategy,
-            "recommended_strategy": recommended_strategy,
-            "expected_improvement": 0.15,  # 15% improvement expected
-            "implementation_steps": [
-                "Analyze current pricing performance",
-                "Implement new pricing strategy",
-                "Monitor market response",
-                "Adjust based on results"
-            ]
-        }
-    
-    def _calculate_demand_factor(self, forecast: Dict[str, Any]) -> float:
-        """Calculate demand-based price factor"""
-        
-        predicted_demand = forecast.get("predicted_demand", 10.0)
-        trend = forecast.get("trend", "stable")
-        
-        # Adjust price based on demand trend
-        if trend == "increasing":
-            return 1.05  # Increase price by 5%
-        elif trend == "decreasing":
-            return 0.95  # Decrease price by 5%
-        else:
-            return 1.0  # No change
-    
-    def _calculate_competition_factor(self, market_conditions: Dict[str, Any]) -> float:
-        """Calculate competition-based price factor"""
-        
-        competitor_prices = market_conditions.get("competitor_prices", {})
-        
-        if not competitor_prices:
-            return 1.0
-        
-        # Calculate average competitor price factor
-        price_factors = [comp["price_factor"] for comp in competitor_prices.values()]
-        avg_factor = sum(price_factors) / len(price_factors)
-        
-        # Adjust to be competitive
-        if avg_factor > 1.1:
-            return 1.02  # Slightly increase price
-        elif avg_factor < 0.9:
-            return 0.98  # Slightly decrease price
-        else:
-            return 1.0  # Stay competitive
-    
-    def _calculate_cost_factor(self, sku: Dict[str, Any]) -> float:
-        """Calculate cost-based price factor"""
-        
-        # For MVP, assume stable costs
-        # In production, this would consider actual cost changes
-        return 1.0
-    
-    def _calculate_price_elasticity(self, sku: Dict[str, Any], forecast: Dict[str, Any]) -> float:
-        """Calculate price elasticity of demand"""
-        
-        # For MVP, use estimated elasticity
-        # In production, this would be calculated from historical data
-        return -0.5  # Moderate elasticity
-    
-    def _analyze_market_position(self, sku: Dict[str, Any], market_conditions: Dict[str, Any]) -> str:
-        """Analyze market position"""
-        
-        # For MVP, provide basic analysis
-        # In production, this would use detailed market data
-        return "competitive"
-    
-    def _calculate_profitability(self, sku: Dict[str, Any], price: float) -> float:
-        """Calculate profitability margin"""
-        
-        # For MVP, assume 20% margin
-        # In production, this would use actual cost data
-        return 0.20
-    
-    def _generate_pricing_reasoning(
-        self,
-        sku: Dict[str, Any],
-        market_conditions: Dict[str, Any],
-        forecast: Dict[str, Any],
-        price_change_percent: float
-    ) -> str:
-        """Generate reasoning for pricing decision"""
-        
-        reasoning = f"""
-        Pricing Analysis for {sku['name']} ({sku['sku_code']}):
-        
-        Current Market Conditions:
-        - Demand Level: {market_conditions['demand_level']}
-        - Competition Level: {market_conditions['competition_level']}
-        - Economic Indicator: {market_conditions['economic_indicator']}
-        
-        Demand Forecast:
-        - Predicted Demand: {forecast.get('predicted_demand', 0)} units
-        - Trend: {forecast.get('trend', 'stable')}
-        
-        Price Change: {price_change_percent:.1f}%
-        
-        Reasoning: Based on current market conditions and demand forecast, 
-        a {price_change_percent:.1f}% price adjustment is recommended to 
-        optimize profitability while maintaining market competitiveness.
-        """
-        
-        return reasoning
-    
-    def _calculate_expected_impact(self, price_change_percent: float, forecast: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate expected impact of price change"""
-        
-        # For MVP, provide estimated impacts
-        # In production, this would use historical elasticity data
-        
-        if price_change_percent > 0:
-            # Price increase
-            demand_impact = -0.1 * price_change_percent  # 10% of price change
-            revenue_impact = 0.9 * price_change_percent  # 90% of price change
-        else:
-            # Price decrease
-            demand_impact = -0.1 * price_change_percent  # Positive demand impact
-            revenue_impact = 1.1 * price_change_percent  # Negative revenue impact
-        
-        return {
-            "demand_impact_percent": demand_impact,
-            "revenue_impact_percent": revenue_impact,
-            "profitability_impact": "positive" if abs(price_change_percent) < 10 else "neutral"
-        }
-    
-    def _generate_analysis_recommendations(
-        self,
-        price_elasticity: float,
-        market_position: str,
-        profitability: float
-    ) -> List[str]:
-        """Generate recommendations based on analysis"""
-        
-        recommendations = []
-        
-        if abs(price_elasticity) > 1.0:
-            recommendations.append("Consider price optimization due to high elasticity")
-        
-        if market_position == "weak":
-            recommendations.append("Review competitive positioning")
-        
-        if profitability < 0.15:
-            recommendations.append("Investigate cost structure and pricing strategy")
-        
-        if not recommendations:
-            recommendations.append("Current pricing strategy appears optimal")
-        
-        return recommendations
-    
-    def clear_cache(self):
-        """Clear pricing cache"""
-        self.pricing_cache.clear() 
+        finally:
+            db.close() 

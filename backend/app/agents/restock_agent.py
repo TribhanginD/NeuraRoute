@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 import uuid
 
 from app.agents.base_agent import BaseAgent
-from app.models.inventory import Inventory, SKU, Location
-from app.models.forecasting import Forecast
+from app.models.inventory import InventoryItem, SKU
+from app.models.merchant import Merchant
+from app.models.forecasting import DemandForecast
 from app.core.database import get_db
 
 logger = structlog.get_logger()
@@ -103,8 +104,8 @@ class RestockAgent(BaseAgent):
         
         try:
             # Get all inventory items
-            inventories = db.query(Inventory).filter(
-                Inventory.current_stock > 0  # Only check items with some stock
+            inventories = db.query(InventoryItem).filter(
+                InventoryItem.current_stock > 0  # Only check items with some stock
             ).all()
             
             low_stock_items = []
@@ -180,18 +181,29 @@ class RestockAgent(BaseAgent):
         db = next(get_db())
         
         try:
-            # Get most recent forecast
-            forecast = db.query(Forecast).filter(
-                Forecast.sku_id == sku_id,
-                Forecast.location_id == location_id
-            ).order_by(Forecast.forecast_date.desc()).first()
+            # Get most recent forecast for the product (using sku_id as product_id)
+            forecast = db.query(DemandForecast).filter(
+                DemandForecast.product_id == str(sku_id)
+            ).order_by(DemandForecast.created_at.desc()).first()
             
             if forecast:
+                # Extract data from the forecast_data JSON field
+                forecast_data = forecast.forecast_data or {}
+                values = forecast_data.get('values', [])
+                
+                # Get the first forecast value or use default
+                if values:
+                    first_value = values[0]
+                    predicted_demand = first_value.get('demand', 0)
+                else:
+                    predicted_demand = 0
+                
                 return {
-                    "predicted_demand": forecast.predicted_demand,
-                    "confidence_lower": forecast.confidence_lower,
-                    "confidence_upper": forecast.confidence_upper,
-                    "reasoning": forecast.reasoning
+                    "predicted_demand": predicted_demand,
+                    "confidence_lower": predicted_demand * 0.8,  # Estimate
+                    "confidence_upper": predicted_demand * 1.2,  # Estimate
+                    "reasoning": forecast_data.get('reasoning', 'AI-generated forecast'),
+                    "confidence_score": float(forecast.confidence_score) if forecast.confidence_score else 0.7
                 }
             else:
                 # Fallback to basic demand estimation
@@ -303,8 +315,8 @@ class RestockAgent(BaseAgent):
         
         try:
             # Update inventory with restocked quantity
-            inventory = db.query(Inventory).filter(
-                Inventory.id == recommendation["inventory_id"]
+            inventory = db.query(InventoryItem).filter(
+                InventoryItem.id == recommendation["inventory_id"]
             ).first()
             
             if inventory:
@@ -361,9 +373,9 @@ class RestockAgent(BaseAgent):
                 try:
                     # Check inventory for this SKU-location combination
                     db = next(get_db())
-                    inventory = db.query(Inventory).filter(
-                        Inventory.sku_id == sku_id,
-                        Inventory.location_id == location_id
+                    inventory = db.query(InventoryItem).filter(
+                        InventoryItem.sku_id == sku_id,
+                        InventoryItem.location_id == location_id
                     ).first()
                     
                     if inventory:
@@ -402,9 +414,9 @@ class RestockAgent(BaseAgent):
         
         try:
             db = next(get_db())
-            inventory = db.query(Inventory).filter(
-                Inventory.sku_id == sku_id,
-                Inventory.location_id == location_id
+            inventory = db.query(InventoryItem).filter(
+                InventoryItem.sku_id == sku_id,
+                InventoryItem.location_id == location_id
             ).first()
             
             if not inventory:

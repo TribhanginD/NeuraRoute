@@ -7,7 +7,7 @@ import uuid
 import json
 
 from app.core.database import get_db
-from app.models.simulation import SimulationState, SimulationTick
+from app.models.simulation import SimulationState, SimulationEvent
 from app.agents.manager import AgentManager
 from app.core.config import settings
 
@@ -24,7 +24,7 @@ class SimulationEngine:
         self.speed_multiplier = 1.0
         self.agent_manager = AgentManager()
         self.simulation_task = None
-        self.tick_interval = settings.simulation_tick_interval  # 15 minutes in seconds
+        self.tick_interval = settings.SIMULATION_TICK_INTERVAL  # 15 minutes in seconds
         
         # Simulation state tracking
         self.active_orders = 0
@@ -294,82 +294,84 @@ class SimulationEngine:
     
     async def _update_system_state(self):
         """Update system state metrics"""
-        db = next(get_db())
-        
-        try:
-            # Count active orders
-            from app.models.merchant import Order
-            self.active_orders = db.query(Order).filter(
-                Order.status.in_(["pending", "processing", "shipped"])
-            ).count()
-            
-            # Count active deliveries
-            from app.models.fleet import Delivery
-            self.active_deliveries = db.query(Delivery).filter(
-                Delivery.status.in_(["pending", "in_transit"])
-            ).count()
-            
-            # Count available vehicles
-            from app.models.fleet import Vehicle
-            self.available_vehicles = db.query(Vehicle).filter(
-                Vehicle.status == "available"
-            ).count()
-            
-            # Count total inventory items
-            from app.models.inventory import InventoryItem
-            self.total_inventory_items = db.query(InventoryItem).count()
-            
-        except Exception as e:
-            logger.error("Error updating system state", error=str(e))
-        finally:
-            db.close()
+        async for db in get_db():
+            try:
+                # Count active orders
+                from app.models.merchant import Order
+                self.active_orders = db.query(Order).filter(
+                    Order.status.in_(["pending", "processing", "shipped"])
+                ).count()
+                
+                # Count active deliveries
+                from app.models.fleet import Delivery
+                self.active_deliveries = db.query(Delivery).filter(
+                    Delivery.status.in_(["pending", "in_transit"])
+                ).count()
+                
+                # Count available vehicles
+                from app.models.fleet import Vehicle
+                self.available_vehicles = db.query(Vehicle).filter(
+                    Vehicle.status == "available"
+                ).count()
+                
+                # Count total inventory items
+                from app.models.inventory import InventoryItem
+                self.total_inventory_items = db.query(InventoryItem).count()
+                
+            except Exception as e:
+                logger.error("Error updating system state", error=str(e))
     
     async def _save_tick_data(self, events_processed: int):
         """Save tick data to database"""
-        db = next(get_db())
-        
-        try:
-            tick = SimulationTick(
-                tick_number=self.tick_count,
-                timestamp=datetime.utcnow(),
-                simulation_time=self.current_time,
-                agents_active=self.agents_active,
-                events_processed=events_processed
-            )
-            
-            db.add(tick)
-            db.commit()
-            
-        except Exception as e:
-            logger.error("Error saving tick data", error=str(e))
-            db.rollback()
-        finally:
-            db.close()
+        async for db in get_db():
+            try:
+                # Create a simulation event for this tick
+                tick_event = SimulationEvent(
+                    tick_number=self.tick_count,
+                    event_type='tick_end',
+                    event_data={
+                        'agents_active': self.agents_active,
+                        'events_processed': events_processed,
+                        'simulation_time': self.current_time.isoformat()
+                    }
+                )
+                
+                db.add(tick_event)
+                await db.commit()
+                
+            except Exception as e:
+                logger.error("Error saving tick data", error=str(e))
+                await db.rollback()
     
     async def _save_simulation_state(self):
         """Save current simulation state to database"""
-        db = next(get_db())
-        
-        try:
-            state = SimulationState(
-                timestamp=datetime.utcnow(),
-                simulation_time=self.current_time,
-                tick_number=self.tick_count,
-                active_orders=self.active_orders,
-                active_deliveries=self.active_deliveries,
-                available_vehicles=self.available_vehicles,
-                total_inventory_items=self.total_inventory_items,
-                system_health=self.system_health
-            )
-            
-            db.add(state)
-            db.commit()
-            
-        except Exception as e:
-            logger.error("Error saving simulation state", error=str(e))
-            db.rollback()
-        finally:
-            db.close()
+        async for db in get_db():
+            try:
+                # Update existing state or create new one
+                state = db.query(SimulationState).first()
+                if not state:
+                    state = SimulationState()
+                    db.add(state)
+                
+                # Update state fields
+                state.status = 'running' if self.is_running_flag else 'stopped'
+                state.current_tick = self.tick_count
+                state.speed_multiplier = self.speed_multiplier
+                state.config = {
+                    'active_orders': self.active_orders,
+                    'active_deliveries': self.active_deliveries,
+                    'available_vehicles': self.available_vehicles,
+                    'total_inventory_items': self.total_inventory_items,
+                    'system_health': self.system_health,
+                    'agents_active': self.agents_active,
+                    'events_processed': self.events_processed
+                }
+                
+                await db.commit()
+                
+            except Exception as e:
+                logger.error("Error saving simulation state", error=str(e))
+                await db.rollback()
     
     async def _initialize_simulation_state(self):
         """Initialize simulation state"""
@@ -378,23 +380,20 @@ class SimulationEngine:
     
     async def _clear_simulation_data(self):
         """Clear simulation data from database"""
-        db = next(get_db())
-        
-        try:
-            # Clear simulation ticks
-            db.query(SimulationTick).delete()
-            
-            # Clear simulation states (keep the latest one)
-            states = db.query(SimulationState).order_by(SimulationState.timestamp.desc()).all()
-            if len(states) > 1:
-                for state in states[1:]:
-                    db.delete(state)
-            
-            db.commit()
-            logger.info("Simulation data cleared")
-            
-        except Exception as e:
-            logger.error("Error clearing simulation data", error=str(e))
-            db.rollback()
-        finally:
-            db.close() 
+        async for db in get_db():
+            try:
+                # Clear simulation events
+                db.query(SimulationEvent).delete()
+                
+                # Clear simulation states (keep the latest one)
+                states = db.query(SimulationState).order_by(SimulationState.created_at.desc()).all()
+                if len(states) > 1:
+                    for state in states[1:]:
+                        db.delete(state)
+                
+                await db.commit()
+                logger.info("Simulation data cleared")
+                
+            except Exception as e:
+                logger.error("Error clearing simulation data", error=str(e))
+                await db.rollback() 

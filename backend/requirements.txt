@@ -1,43 +1,119 @@
-# FastAPI and web framework
+# Core Framework
 fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+uvicorn[standard]==0.24.0.post1
+pydantic==2.7.4
+pydantic-settings==2.10.1
 
 # Database
-sqlalchemy==2.0.23
-alembic==1.12.1
+sqlalchemy[asyncio]==2.0.23
+alembic==1.13.0
+asyncpg==0.29.0
 psycopg2-binary==2.9.9
 redis==5.0.1
 
-# AI and ML
-langchain==0.0.350
-langchain-openai==0.0.2
-langchain-anthropic==0.0.1
-langgraph==0.0.20
+# AI/ML - Upgraded to latest 0.3.x+ versions for compatibility
+langchain==0.3.7
+langchain-openai==0.3.2
+langchain-anthropic==0.3.2
+langchain-google-genai==2.1.5
+langchain-cohere==0.3.2
+langchain-community==0.3.2
+openai==1.58.1
+anthropic==0.50.0
+cohere>=5.1.8
+ollama==0.1.7
+langchain-groq
+
+# Vector Database
 faiss-cpu==1.7.4
 chromadb==0.4.18
-openai==1.3.7
-anthropic==0.7.7
 
-# Data processing
-pandas==2.1.3
+# Time Series & Forecasting
+prophet==1.1.4
+pandas==2.1.4
 numpy==1.25.2
 scikit-learn==1.3.2
 
-# Utilities
-python-dotenv==1.0.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
-httpx==0.25.2
-aiofiles==23.2.1
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+# Computer Vision (for traffic analysis)
+opencv-python==4.8.1.78
+pillow==10.1.0
 
-# Monitoring and logging
+# NLP & Sentiment Analysis
+transformers==4.36.2
+torch==2.1.2
+sentence-transformers==2.2.2
+
+# Graph Neural Networks
+torch-geometric==2.4.0
+networkx==3.2.1
+
+# Reinforcement Learning
+stable-baselines3==2.2.1
+gymnasium==0.29.1
+
+# HTTP & API
+httpx>=0.25.2,<0.26.0
+requests==2.31.0
+aiohttp==3.9.1
+
+# Async & Concurrency
+asyncio-mqtt==0.16.1
+celery==5.3.4
+
+# WebSocket
+websockets==12.0
+
+# Logging & Monitoring
 structlog==23.2.0
 prometheus-client==0.19.0
 
-# Testing
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2023.3
+click==8.1.7
+rich==13.7.0
+tqdm==4.66.1
+
+# Development & Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
-httpx==0.25.2 
+pytest-cov==4.1.0
+black==23.12.1
+isort==5.13.2
+flake8==6.1.0
+mypy==1.8.0
+
+# Environment & Configuration
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Data Processing
+polars==0.20.3
+pyarrow==14.0.2
+
+# Geospatial
+geopy==2.4.1
+shapely==2.0.2
+
+# Caching
+aioredis==2.0.1
+
+# Background Tasks
+apscheduler==3.10.4
+
+# Validation
+marshmallow==3.20.1
+
+# Serialization
+orjson==3.9.15
+
+# File Handling
+aiofiles==23.2.1
+
+# New added from the code block
+uvloop==0.19.0 

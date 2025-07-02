@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-success {
+    @apply bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  }
+  
+  .input-field {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+  
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .status-success {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .status-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .status-error {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .status-info {
+    @apply bg-blue-100 text-blue-800;
+  }
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Loading animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Map container styles */
+.map-container {
+  height: 100%;
+  width: 100%;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+/* Chat styles */
+.chat-message {
+  @apply mb-4 p-3 rounded-lg max-w-xs;
+}
+
+.chat-message.user {
+  @apply bg-blue-500 text-white ml-auto;
+}
+
+.chat-message.bot {
+  @apply bg-gray-200 text-gray-800;
+}
+
+/* Agent status indicators */
+.agent-status-indicator {
+  @apply w-3 h-3 rounded-full inline-block mr-2;
+}
+
+.agent-status-idle {
+  @apply bg-gray-400;
+}
+
+.agent-status-running {
+  @apply bg-green-500;
+}
+
+.agent-status-error {
+  @apply bg-red-500;
+}
+
+.agent-status-stopped {
+  @apply bg-yellow-500;
+}
+
+/* Simulation controls */
+.simulation-control {
+  @apply fixed bottom-4 right-4 bg-white rounded-lg shadow-lg border border-gray-200 p-4;
+}
+
+/* Responsive utilities */
+@media (max-width: 768px) {
+  .sidebar {
+    @apply transform -translate-x-full transition-transform duration-300;
+  }
+  
+  .sidebar.open {
+    @apply transform translate-x-0;
+  }
+} 

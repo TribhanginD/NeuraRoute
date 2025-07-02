@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 import structlog
 
 from app.core.database import get_db
-from app.models.agents import Agent, AgentLog, AgentMemory
+from app.models.agents import Agent, AgentLog, AgenticMemory
 from app.agents.manager import AgentManager
 
 logger = structlog.get_logger()
@@ -135,11 +135,10 @@ async def get_agent_memory(
 ):
     """Get agent memory"""
     try:
-        memories = db.query(AgentMemory).filter(
-            AgentMemory.agent_id == agent_id,
-            AgentMemory.is_expired() == False
+        memories = db.query(AgenticMemory).filter(
+            AgenticMemory.is_expired() == False
         ).order_by(
-            AgentMemory.importance.desc()
+            AgenticMemory.importance.desc()
         ).offset(offset).limit(limit).all()
         
         return {

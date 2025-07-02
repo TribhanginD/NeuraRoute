@@ -1,106 +1,305 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, JSON
-from sqlalchemy.orm import relationship
+"""
+Simulation models for the logistics system
+"""
+
+import enum
+import uuid
 from datetime import datetime
-from enum import Enum
-from .base import BaseModel
+from typing import Dict, Any, Optional, List
+from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, Enum, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from pydantic import BaseModel, Field
 
-class EventType(str, Enum):
-    WEATHER = "weather"
-    TRAFFIC = "traffic"
-    DEMAND_SPIKE = "demand_spike"
-    SUPPLY_SHORTAGE = "supply_shortage"
-    PRICE_CHANGE = "price_change"
-    COMPETITION = "competition"
-    SPECIAL_EVENT = "special_event"
+from .base import Base, BaseModelMixin
 
-class SimulationState(BaseModel):
-    """Global simulation state"""
-    __tablename__ = "simulation_states"
+# Define enum values
+class SimulationStatus:
+    STOPPED = 'stopped'
+    RUNNING = 'running'
+    PAUSED = 'paused'
+    ERROR = 'error'
+
+class EventType:
+    TICK_START = 'tick_start'
+    TICK_END = 'tick_end'
+    AGENT_ACTION = 'agent_action'
+    ORDER_CREATED = 'order_created'
+    ORDER_ASSIGNED = 'order_assigned'
+    ORDER_DELIVERED = 'order_delivered'
+    INVENTORY_UPDATE = 'inventory_update'
+    PRICE_CHANGE = 'price_change'
+    ROUTE_UPDATE = 'route_update'
+    VEHICLE_UPDATE = 'vehicle_update'
+    FORECAST_GENERATED = 'forecast_generated'
+    ERROR = 'error'
+
+# Create enum types
+simulation_status_enum = Enum(
+    SimulationStatus.STOPPED,
+    SimulationStatus.RUNNING,
+    SimulationStatus.PAUSED,
+    SimulationStatus.ERROR,
+    name='simulation_status'
+)
+
+event_type_enum = Enum(
+    EventType.TICK_START,
+    EventType.TICK_END,
+    EventType.AGENT_ACTION,
+    EventType.ORDER_CREATED,
+    EventType.ORDER_ASSIGNED,
+    EventType.ORDER_DELIVERED,
+    EventType.INVENTORY_UPDATE,
+    EventType.PRICE_CHANGE,
+    EventType.ROUTE_UPDATE,
+    EventType.VEHICLE_UPDATE,
+    EventType.FORECAST_GENERATED,
+    EventType.ERROR,
+    name='event_type'
+)
+
+class SimulationState(Base):
+    """Simulation state model"""
     
-    simulation_id = Column(String(50), unique=True, nullable=False, index=True)
-    current_time = Column(DateTime, nullable=False)
-    tick_count = Column(Integer, default=0)
-    is_running = Column(Boolean, default=False)
-    speed_multiplier = Column(Float, default=1.0)  # Simulation speed
-    config = Column(JSON)  # Simulation configuration
+    __tablename__ = "simulation_state"
     
-    # Market conditions
-    weather_condition = Column(String(50))
-    traffic_level = Column(String(20))  # low, medium, high
-    demand_multiplier = Column(Float, default=1.0)
-    supply_multiplier = Column(Float, default=1.0)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    status = Column(simulation_status_enum, default='stopped', nullable=False)
+    current_tick = Column(Integer, default=0, nullable=False)
+    start_time = Column(DateTime(timezone=True))
+    last_tick_time = Column(DateTime(timezone=True))
+    speed_multiplier = Column(Float, default=1.0)
+    config = Column(JSON, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    # Performance metrics
-    total_orders = Column(Integer, default=0)
-    completed_deliveries = Column(Integer, default=0)
-    failed_deliveries = Column(Integer, default=0)
-    average_delivery_time = Column(Float, default=0.0)
+    # Relationships
+    events = relationship("SimulationEvent", back_populates="simulation_state")
     
-    def advance_time(self, minutes: int = 15):
-        """Advance simulation time"""
-        from datetime import timedelta
-        self.current_time += timedelta(minutes=minutes)
-        self.tick_count += 1
+    def __init__(self, config: Dict[str, Any] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.status = 'stopped'
+        self.current_tick = 0
+        self.config = config or {}
     
-    def update_market_conditions(self, **conditions):
-        """Update market conditions"""
-        for key, value in conditions.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+    def start(self):
+        """Start simulation"""
+        self.status = 'running'
+        self.start_time = datetime.utcnow()
+        self.last_tick_time = datetime.utcnow()
     
-    def get_market_summary(self) -> dict:
-        """Get current market summary"""
+    def stop(self):
+        """Stop simulation"""
+        self.status = 'stopped'
+    
+    def pause(self):
+        """Pause simulation"""
+        self.status = 'paused'
+    
+    def advance_tick(self):
+        """Advance to next tick"""
+        self.current_tick += 1
+        self.last_tick_time = datetime.utcnow()
+    
+    def get_config(self, key: str, default: Any = None) -> Any:
+        """Get configuration value"""
+        return self.config.get(key, default) if self.config else default
+    
+    def update_config(self, key: str, value: Any):
+        """Update configuration"""
+        if not self.config:
+            self.config = {}
+        self.config[key] = value
+    
+    def get_runtime(self) -> Optional[float]:
+        """Get simulation runtime in seconds"""
+        if self.start_time and self.last_tick_time:
+            return (self.last_tick_time - self.start_time).total_seconds()
+        return None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
         return {
-            "current_time": self.current_time.isoformat(),
-            "tick_count": self.tick_count,
-            "weather": self.weather_condition,
-            "traffic": self.traffic_level,
-            "demand_multiplier": self.demand_multiplier,
-            "supply_multiplier": self.supply_multiplier,
-            "total_orders": self.total_orders,
-            "completed_deliveries": self.completed_deliveries,
-            "success_rate": (self.completed_deliveries / max(1, self.total_orders)) * 100
+            'id': str(self.id),
+            'status': self.status,
+            'current_tick': self.current_tick,
+            'start_time': self.start_time.isoformat() if self.start_time else None,
+            'last_tick_time': self.last_tick_time.isoformat() if self.last_tick_time else None,
+            'speed_multiplier': self.speed_multiplier,
+            'config': self.config,
+            'runtime_seconds': self.get_runtime(),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+    
+    def __repr__(self) -> str:
+        return f"<SimulationState(id={self.id}, status='{self.status}', tick={self.current_tick})>"
+    
+    def is_running(self) -> bool:
+        """Check if simulation is running"""
+        return self.status == SimulationStatus.RUNNING
+    
+    def is_paused(self) -> bool:
+        """Check if simulation is paused"""
+        return self.status == SimulationStatus.PAUSED
+    
+    def can_start(self) -> bool:
+        """Check if simulation can be started"""
+        return self.status in [SimulationStatus.STOPPED, SimulationStatus.ERROR]
+    
+    def can_stop(self) -> bool:
+        """Check if simulation can be stopped"""
+        return self.status in [SimulationStatus.RUNNING, SimulationStatus.PAUSED]
+    
+    def can_pause(self) -> bool:
+        """Check if simulation can be paused"""
+        return self.status == SimulationStatus.RUNNING
+    
+    def can_resume(self) -> bool:
+        """Check if simulation can be resumed"""
+        return self.status == SimulationStatus.PAUSED
+    
+    def update_status(self, status: SimulationStatus) -> None:
+        """Update simulation status"""
+        self.status = status
+        self.updated_at = datetime.utcnow()
+        
+        if status == SimulationStatus.RUNNING and not self.start_time:
+            self.start_time = datetime.utcnow()
+    
+    def reset(self) -> None:
+        """Reset simulation to initial state"""
+        self.current_tick = 0
+        self.start_time = None
+        self.last_tick_time = None
+        self.status = SimulationStatus.STOPPED
+        self.updated_at = datetime.utcnow()
 
-class MarketEvent(BaseModel):
-    """Market events that affect simulation"""
-    __tablename__ = "market_events"
+
+class SimulationEvent(Base):
+    """Simulation event model for tracking all simulation activities"""
     
-    event_type = Column(String(50), nullable=False)  # EventType
-    title = Column(String(200), nullable=False)
-    description = Column(Text)
-    severity = Column(String(20), default="medium")  # low, medium, high, critical
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime)
-    affected_sectors = Column(JSON)  # List of affected city sectors
-    impact_data = Column(JSON)  # Event-specific impact data
-    is_active = Column(Boolean, default=True)
+    __tablename__ = "simulation_events"
     
-    # Event effects
-    demand_effect = Column(Float, default=1.0)  # Multiplier for demand
-    supply_effect = Column(Float, default=1.0)  # Multiplier for supply
-    traffic_effect = Column(Float, default=1.0)  # Multiplier for delivery times
-    price_effect = Column(Float, default=1.0)  # Multiplier for prices
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tick_number = Column(Integer, nullable=False, index=True)
+    event_type = Column(event_type_enum, nullable=False, index=True)
+    event_data = Column(JSON, default={})
+    timestamp = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    def is_current(self, current_time: datetime) -> bool:
-        """Check if event is currently active"""
-        if not self.is_active:
-            return False
-        if current_time < self.start_time:
-            return False
-        if self.end_time and current_time > self.end_time:
-            return False
-        return True
+    # Relationships
+    simulation_state_id = Column(UUID(as_uuid=True), ForeignKey('simulation_state.id'))
+    simulation_state = relationship("SimulationState", back_populates="events")
     
-    def get_impact_summary(self) -> dict:
-        """Get event impact summary"""
-        return {
-            "event_type": self.event_type,
-            "title": self.title,
-            "severity": self.severity,
-            "demand_effect": self.demand_effect,
-            "supply_effect": self.supply_effect,
-            "traffic_effect": self.traffic_effect,
-            "price_effect": self.price_effect,
-            "affected_sectors": self.affected_sectors
-        } 
+    def __repr__(self):
+        return f"<SimulationEvent(id={self.id}, tick={self.tick_number}, type='{self.event_type}')>"
+    
+    def get_data_value(self, key: str, default: Any = None) -> Any:
+        """Get event data value"""
+        return self.event_data.get(key, default)
+    
+    def set_data_value(self, key: str, value: Any) -> None:
+        """Set event data value"""
+        if not self.event_data:
+            self.event_data = {}
+        self.event_data[key] = value
+        self.updated_at = datetime.utcnow()
+
+
+# Pydantic schemas
+class SimulationStateBase(BaseModel):
+    """Base simulation state schema"""
+    status: str = Field(..., description="Simulation status")
+    current_tick: int = Field(..., description="Current tick number")
+    speed_multiplier: float = Field(..., description="Simulation speed multiplier")
+    config: Dict[str, Any] = Field(default={}, description="Simulation configuration")
+
+
+class SimulationStateCreate(SimulationStateBase):
+    """Schema for creating simulation state"""
+    pass
+
+
+class SimulationStateUpdate(BaseModel):
+    """Schema for updating simulation state"""
+    status: Optional[str] = Field(None, description="Simulation status")
+    speed_multiplier: Optional[float] = Field(None, description="Simulation speed multiplier")
+    config: Optional[Dict[str, Any]] = Field(None, description="Simulation configuration")
+
+
+class SimulationStateResponse(SimulationStateBase):
+    """Schema for simulation state responses"""
+    id: str = Field(..., description="Simulation state ID")
+    start_time: Optional[datetime] = Field(None, description="Simulation start time")
+    last_tick_time: Optional[datetime] = Field(None, description="Last tick time")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+    
+    class Config:
+        from_attributes = True
+
+
+class SimulationEventBase(BaseModel):
+    """Base simulation event schema"""
+    tick_number: int = Field(..., description="Tick number")
+    event_type: str = Field(..., description="Event type")
+    event_data: Dict[str, Any] = Field(default={}, description="Event data")
+
+
+class SimulationEventCreate(SimulationEventBase):
+    """Schema for creating simulation event"""
+    pass
+
+
+class SimulationEventResponse(SimulationEventBase):
+    """Schema for simulation event responses"""
+    id: str = Field(..., description="Event ID")
+    timestamp: datetime = Field(..., description="Event timestamp")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    
+    class Config:
+        from_attributes = True
+
+
+class SimulationControl(BaseModel):
+    """Schema for simulation control commands"""
+    action: str = Field(..., description="Control action (start, stop, pause, resume, reset)")
+    speed_multiplier: Optional[float] = Field(None, description="Speed multiplier for start action")
+
+
+class SimulationStatusResponse(BaseModel):
+    """Schema for simulation status response"""
+    is_running: bool = Field(..., description="Whether simulation is running")
+    current_tick: int = Field(..., description="Current tick number")
+    total_ticks: int = Field(..., description="Total ticks since start")
+    speed_multiplier: float = Field(..., description="Current speed multiplier")
+    start_time: Optional[datetime] = Field(None, description="Simulation start time")
+    last_tick_time: Optional[datetime] = Field(None, description="Last tick time")
+    uptime_seconds: Optional[int] = Field(None, description="Uptime in seconds")
+    status: str = Field(..., description="Current status")
+
+
+class SimulationMetrics(BaseModel):
+    """Schema for simulation metrics"""
+    total_events: int = Field(..., description="Total events generated")
+    events_by_type: Dict[str, int] = Field(..., description="Event count by type")
+    avg_events_per_tick: float = Field(..., description="Average events per tick")
+    total_runtime_seconds: int = Field(..., description="Total runtime in seconds")
+    ticks_per_second: float = Field(..., description="Ticks processed per second")
+    error_count: int = Field(..., description="Number of errors")
+    last_error: Optional[str] = Field(None, description="Last error message")
+
+
+class SimulationSummary(BaseModel):
+    """Schema for simulation summary"""
+    status: str = Field(..., description="Current status")
+    current_tick: int = Field(..., description="Current tick")
+    total_events: int = Field(..., description="Total events")
+    active_agents: int = Field(..., description="Active agents")
+    pending_orders: int = Field(..., description="Pending orders")
+    available_vehicles: int = Field(..., description="Available vehicles")
+    low_stock_items: int = Field(..., description="Low stock items") 

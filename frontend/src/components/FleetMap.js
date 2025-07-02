@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, MapPin, Route, Clock } from 'lucide-react';
+import { Truck, MapPin, Map, Clock } from 'lucide-react';
 
 const FleetMap = () => {
   const [vehicles, setVehicles] = useState([]);
@@ -79,7 +79,7 @@ const FleetMap = () => {
                 </div>
                 
                 <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <Route className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <Map className="h-8 w-8 text-green-600 mx-auto mb-2" />
                   <p className="text-2xl font-bold text-green-600">{routes.length}</p>
                   <p className="text-sm text-green-600">Active Routes</p>
                 </div>

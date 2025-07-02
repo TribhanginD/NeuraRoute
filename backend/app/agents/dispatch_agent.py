@@ -8,7 +8,7 @@ import math
 
 from app.agents.base_agent import BaseAgent
 from app.models.fleet import Vehicle, Delivery, Route
-from app.models.merchant import Order
+from app.models.orders import Order
 from app.core.database import get_db
 
 logger = structlog.get_logger()

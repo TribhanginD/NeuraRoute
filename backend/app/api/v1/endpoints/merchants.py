@@ -1,10 +1,13 @@
 from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 import structlog
 
 from app.core.database import get_db
-from app.models.merchant import Merchant, Order, Customer
+from app.models.merchant import Merchant
+from app.models.orders import Order
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -13,11 +16,12 @@ router = APIRouter()
 async def get_merchants(
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all merchants"""
     try:
-        merchants = db.query(Merchant).offset(offset).limit(limit).all()
+        result = await db.execute(select(Merchant).offset(offset).limit(limit))
+        merchants = result.scalars().all()
         
         return {
             "merchants": [
@@ -38,14 +42,15 @@ async def get_merchants(
             "total": len(merchants)
         }
     except Exception as e:
-        logger.error("Failed to get merchants", error=str(e))
+        logger.error(f"Failed to get merchants: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{merchant_id}")
-async def get_merchant(merchant_id: str, db: Session = Depends(get_db)):
+async def get_merchant(merchant_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific merchant details"""
     try:
-        merchant = db.query(Merchant).filter(Merchant.merchant_id == merchant_id).first()
+        result = await db.execute(select(Merchant).where(Merchant.merchant_id == merchant_id))
+        merchant = result.scalar_one_or_none()
         if not merchant:
             raise HTTPException(status_code=404, detail="Merchant not found")
         
@@ -69,7 +74,7 @@ async def get_merchant(merchant_id: str, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get merchant {merchant_id}", error=str(e))
+        logger.error(f"Failed to get merchant {merchant_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{merchant_id}/orders")
@@ -78,16 +83,17 @@ async def get_merchant_orders(
     status: str = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get orders for a specific merchant"""
     try:
-        query = db.query(Order).filter(Order.merchant_id == merchant_id)
+        query = select(Order).where(Order.merchant_id == merchant_id)
         
         if status:
-            query = query.filter(Order.status == status)
+            query = query.where(Order.status == status)
         
-        orders = query.offset(offset).limit(limit).all()
+        result = await db.execute(query.offset(offset).limit(limit))
+        orders = result.scalars().all()
         
         return {
             "orders": [
@@ -108,7 +114,7 @@ async def get_merchant_orders(
             "total": len(orders)
         }
     except Exception as e:
-        logger.error(f"Failed to get orders for merchant {merchant_id}", error=str(e))
+        logger.error(f"Failed to get orders for merchant {merchant_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/orders")
@@ -117,18 +123,19 @@ async def get_orders(
     merchant_id: str = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all orders with optional filtering"""
     try:
-        query = db.query(Order)
+        query = select(Order)
         
         if status:
-            query = query.filter(Order.status == status)
+            query = query.where(Order.status == status)
         if merchant_id:
-            query = query.filter(Order.merchant_id == merchant_id)
+            query = query.where(Order.merchant_id == merchant_id)
         
-        orders = query.offset(offset).limit(limit).all()
+        result = await db.execute(query.offset(offset).limit(limit))
+        orders = result.scalars().all()
         
         return {
             "orders": [
@@ -153,14 +160,15 @@ async def get_orders(
             "total": len(orders)
         }
     except Exception as e:
-        logger.error("Failed to get orders", error=str(e))
+        logger.error(f"Failed to get orders: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/orders/{order_id}")
-async def get_order(order_id: str, db: Session = Depends(get_db)):
+async def get_order(order_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific order details"""
     try:
-        order = db.query(Order).filter(Order.order_id == order_id).first()
+        result = await db.execute(select(Order).where(Order.order_id == order_id))
+        order = result.scalar_one_or_none()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         
@@ -200,18 +208,20 @@ async def get_order(order_id: str, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get order {order_id}", error=str(e))
+        logger.error(f"Failed to get order {order_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/customers")
 async def get_customers(
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all customers"""
     try:
-        customers = db.query(Customer).offset(offset).limit(limit).all()
+        from app.models.orders import Customer
+        result = await db.execute(select(Customer).offset(offset).limit(limit))
+        customers = result.scalars().all()
         
         return {
             "customers": [
@@ -227,18 +237,29 @@ async def get_customers(
             "total": len(customers)
         }
     except Exception as e:
-        logger.error("Failed to get customers", error=str(e))
+        logger.error(f"Failed to get customers: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/summary")
-async def get_merchants_summary(db: Session = Depends(get_db)):
+async def get_merchants_summary(db: AsyncSession = Depends(get_db)):
     """Get merchants summary statistics"""
     try:
-        total_merchants = db.query(Merchant).count()
-        active_merchants = db.query(Merchant).filter(Merchant.status == "active").count()
-        total_orders = db.query(Order).count()
-        pending_orders = db.query(Order).filter(Order.status == "pending").count()
-        total_customers = db.query(Customer).count()
+        from app.models.orders import Customer
+        
+        result = await db.execute(select(func.count(Merchant.merchant_id)))
+        total_merchants = result.scalar()
+        
+        result = await db.execute(select(func.count(Merchant.merchant_id)).where(Merchant.status == "active"))
+        active_merchants = result.scalar()
+        
+        result = await db.execute(select(func.count(Order.order_id)))
+        total_orders = result.scalar()
+        
+        result = await db.execute(select(func.count(Order.order_id)).where(Order.status == "pending"))
+        pending_orders = result.scalar()
+        
+        result = await db.execute(select(func.count(Customer.customer_id)))
+        total_customers = result.scalar()
         
         return {
             "total_merchants": total_merchants,
@@ -249,5 +270,5 @@ async def get_merchants_summary(db: Session = Depends(get_db)):
             "order_completion_rate": ((total_orders - pending_orders) / total_orders * 100) if total_orders > 0 else 0
         }
     except Exception as e:
-        logger.error("Failed to get merchants summary", error=str(e))
+        logger.error(f"Failed to get merchants summary: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

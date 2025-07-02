@@ -1,12 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
-from typing import List, Dict, Any
-import structlog
+from fastapi import APIRouter, HTTPException, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from typing import Optional
+import logging
 
 from app.core.database import get_db
 from app.models.inventory import InventoryItem, SKU, Location
 
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/items")
@@ -15,18 +16,20 @@ async def get_inventory_items(
     sku_id: str = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get inventory items with optional filtering"""
     try:
-        query = db.query(InventoryItem)
+        query = select(InventoryItem)
         
         if location_id:
-            query = query.filter(InventoryItem.location_id == location_id)
-        if sku_id:
-            query = query.filter(InventoryItem.sku_id == sku_id)
+            query = query.where(InventoryItem.location_id == location_id)
         
-        items = query.offset(offset).limit(limit).all()
+        if sku_id:
+            query = query.where(InventoryItem.sku_id == sku_id)
+        
+        result = await db.execute(query.offset(offset).limit(limit))
+        items = result.scalars().all()
         
         return {
             "items": [
@@ -39,7 +42,7 @@ async def get_inventory_items(
                     "available_quantity": item.available_quantity,
                     "last_updated": item.last_updated.isoformat(),
                     "sku": {
-                        "sku_id": item.sku.sku_id,
+                        "sku_id": item.sku.id,
                         "name": item.sku.name,
                         "category": item.sku.category,
                         "unit": item.sku.unit
@@ -58,10 +61,11 @@ async def get_inventory_items(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/items/{item_id}")
-async def get_inventory_item(item_id: int, db: Session = Depends(get_db)):
+async def get_inventory_item(item_id: int, db: AsyncSession = Depends(get_db)):
     """Get specific inventory item"""
     try:
-        item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
+        result = await db.execute(select(InventoryItem).where(InventoryItem.id == item_id))
+        item = result.scalar_one_or_none()
         if not item:
             raise HTTPException(status_code=404, detail="Inventory item not found")
         
@@ -74,7 +78,7 @@ async def get_inventory_item(item_id: int, db: Session = Depends(get_db)):
             "available_quantity": item.available_quantity,
             "last_updated": item.last_updated.isoformat(),
             "sku": {
-                "sku_id": item.sku.sku_id,
+                "sku_id": item.sku.id,
                 "name": item.sku.name,
                 "category": item.sku.category,
                 "unit": item.sku.unit,
@@ -99,21 +103,22 @@ async def get_skus(
     category: str = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get SKUs with optional filtering"""
     try:
-        query = db.query(SKU)
+        query = select(SKU)
         
         if category:
-            query = query.filter(SKU.category == category)
+            query = query.where(SKU.category == category)
         
-        skus = query.offset(offset).limit(limit).all()
+        result = await db.execute(query.offset(offset).limit(limit))
+        skus = result.scalars().all()
         
         return {
             "skus": [
                 {
-                    "sku_id": sku.sku_id,
+                    "sku_id": sku.id,
                     "name": sku.name,
                     "category": sku.category,
                     "unit": sku.unit,
@@ -128,15 +133,16 @@ async def get_skus(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/skus/{sku_id}")
-async def get_sku(sku_id: str, db: Session = Depends(get_db)):
+async def get_sku(sku_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific SKU details"""
     try:
-        sku = db.query(SKU).filter(SKU.sku_id == sku_id).first()
+        result = await db.execute(select(SKU).where(SKU.id == sku_id))
+        sku = result.scalar_one_or_none()
         if not sku:
             raise HTTPException(status_code=404, detail="SKU not found")
         
         return {
-            "sku_id": sku.sku_id,
+            "sku_id": sku.id,
             "name": sku.name,
             "category": sku.category,
             "unit": sku.unit,
@@ -154,11 +160,12 @@ async def get_sku(sku_id: str, db: Session = Depends(get_db)):
 async def get_locations(
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all locations"""
     try:
-        locations = db.query(Location).offset(offset).limit(limit).all()
+        result = await db.execute(select(Location).offset(offset).limit(limit))
+        locations = result.scalars().all()
         
         return {
             "locations": [
@@ -178,10 +185,11 @@ async def get_locations(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/locations/{location_id}")
-async def get_location(location_id: int, db: Session = Depends(get_db)):
+async def get_location(location_id: int, db: AsyncSession = Depends(get_db)):
     """Get specific location details"""
     try:
-        location = db.query(Location).filter(Location.id == location_id).first()
+        result = await db.execute(select(Location).where(Location.id == location_id))
+        location = result.scalar_one_or_none()
         if not location:
             raise HTTPException(status_code=404, detail="Location not found")
         
@@ -202,17 +210,24 @@ async def get_location(location_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/summary")
-async def get_inventory_summary(db: Session = Depends(get_db)):
+async def get_inventory_summary(db: AsyncSession = Depends(get_db)):
     """Get inventory summary statistics"""
     try:
-        total_items = db.query(InventoryItem).count()
-        total_skus = db.query(SKU).count()
-        total_locations = db.query(Location).count()
+        # Get total counts
+        result = await db.execute(select(func.count(InventoryItem.id)))
+        total_items = result.scalar()
+        
+        result = await db.execute(select(func.count(SKU.id)))
+        total_skus = result.scalar()
+        
+        result = await db.execute(select(func.count(Location.id)))
+        total_locations = result.scalar()
         
         # Get low stock items (less than 10 available)
-        low_stock_items = db.query(InventoryItem).filter(
-            InventoryItem.available_quantity < 10
-        ).count()
+        result = await db.execute(
+            select(func.count(InventoryItem.id)).where(InventoryItem.available_quantity < 10)
+        )
+        low_stock_items = result.scalar()
         
         return {
             "total_items": total_items,
