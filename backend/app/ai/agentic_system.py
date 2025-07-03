@@ -11,13 +11,8 @@ from typing import Dict, Any, Optional, List, Union
 from dataclasses import dataclass
 from enum import Enum
 
-from langchain.agents import AgentExecutor, create_openai_functions_agent
-from langchain.agents import create_react_agent
-from langchain.tools import BaseTool, Tool
-from langchain.schema import BaseMessage, HumanMessage, SystemMessage
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.memory import ConversationBufferMemory
-from langchain.schema.runnable import RunnablePassthrough
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from app.ai.model_manager import get_ai_model_manager
@@ -95,14 +90,14 @@ class DispatchFleetInput(BaseModel):
     route_id: str = Field(..., description="ID of the route to assign")
     priority: str = Field(default="normal", description="Dispatch priority: low, normal, high, urgent")
 
-class AgenticTool(BaseTool):
+class AgenticTool:
     """Base class for agentic tools with approval workflow"""
     
     approval_threshold: float = Field(default=1000.0, description="Threshold for requiring approval")
     action_history: List[AgentAction] = Field(default_factory=list, description="History of actions taken by this tool")
     
     def __init__(self, name: str, description: str, approval_threshold: float = 1000.0):
-        super().__init__(name=name, description=description)
+        self.name = name
         self.approval_threshold = approval_threshold
         self.action_history: List[AgentAction] = []
     
@@ -330,10 +325,6 @@ class AgenticSystem:
         self.ai_manager = None
         self.agent_executor = None
         self.tools: List[AgenticTool] = []
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
         self.simulation_mode = False
         self.action_queue: List[AgentAction] = []
         self.approved_actions: List[AgentAction] = []
@@ -401,22 +392,10 @@ Always provide clear reasoning for your decisions and consider the broader impac
             if not default_provider or not default_provider.client:
                 raise ValueError("No default AI provider available")
             llm = default_provider.client
-            
-            # Use a simple LLM chain for now to avoid complex agent issues
-            from langchain.chains import LLMChain
-            from langchain.prompts import PromptTemplate
-            
-            # Create a simple prompt template
-            prompt_template = PromptTemplate(
-                input_variables=["context"],
-                template=self.system_prompt + "\n\nContext: {context}\n\nBased on this information, provide recommendations for logistics optimization."
-            )
-            
-            # Create LLM chain
-            self.llm_chain = LLMChain(llm=llm, prompt=prompt_template)
-            
-            logger.info("Agentic system initialized with LLM chain")
-            
+            # Use a simple prompt and direct LLM call instead of LLMChain
+            self.llm = llm
+            self.prompt_template = self.system_prompt + "\n\nContext: {context}\n\nBased on this information, provide recommendations for logistics optimization."
+            logger.info("Agentic system initialized with direct LLM call")
         except Exception as e:
             logger.error(f"Failed to create agentic system: {str(e)}")
             raise
@@ -426,21 +405,15 @@ Always provide clear reasoning for your decisions and consider the broader impac
         try:
             # Build context prompt
             context_prompt = self._build_context_prompt(context)
-            
-            # Run LLM chain
-            result = await self.llm_chain.ainvoke({
-                "context": context_prompt
-            })
-            
-            # For now, return the LLM response as reasoning
-            # In a full implementation, you would parse this for actions
+            # Run LLM directly
+            prompt = self.prompt_template.format(context=context_prompt)
+            result = await self.llm.ainvoke(prompt)
             return {
-                "reasoning": result.get("text", ""),
+                "reasoning": result.get("text", "") if isinstance(result, dict) else str(result),
                 "actions": [],  # No actions for now, just recommendations
                 "confidence": self._calculate_confidence(result),
                 "timestamp": datetime.utcnow().isoformat()
             }
-            
         except Exception as e:
             logger.error(f"Error processing situation: {str(e)}")
             raise

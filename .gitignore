@@ -4,3 +4,5 @@
 /backend/app/core/__pycache__
 /backend/app/models/__pycache__
 /backend/app/simulation/__pycache__
+*.pyc
+*.pyc

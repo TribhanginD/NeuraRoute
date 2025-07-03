@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
     # Initialize agent manager
     try:
         agent_manager = AgentManager()
-        await agent_manager.initialize()
+        await agent_manager.start()
         logger.info("Agent manager initialized successfully")
     except Exception as e:
         logger.error("Failed to initialize agent manager", error=str(e))

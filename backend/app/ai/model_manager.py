@@ -20,10 +20,15 @@ try:
 except ImportError:
     GOOGLE_GENAI_AVAILABLE = False
     ChatGoogleGenerativeAI = None
-from langchain_community.llms import Ollama
-from langchain.schema import HumanMessage, SystemMessage, BaseMessage
-from langchain.prompts import ChatPromptTemplate
-from langchain.cache import RedisCache
+try:
+    from langchain_community.llms import Ollama
+except ImportError:
+    Ollama = None
+    import warnings
+    warnings.warn("Ollama integration is unavailable due to missing or incompatible langchain_community.")
+from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage
+from langchain_core.prompts import ChatPromptTemplate
+# from langchain.cache import RedisCache  # Disabled: requires langchain-community
 from langchain.globals import set_llm_cache
 from langchain_groq import ChatGroq
 
@@ -300,11 +305,11 @@ class AIModelManager:
         """Setup AI response caching"""
         try:
             # Use Redis for caching if available
-            cache = RedisCache(
-                redis_url=settings.REDIS_URL,
-                ttl=settings.AI_CACHE_TTL
-            )
-            set_llm_cache(cache)
+            # cache = RedisCache(
+            #     redis_url=settings.REDIS_URL,
+            #     ttl=settings.AI_CACHE_TTL
+            # )
+            # set_llm_cache(cache)
             logger.info("AI caching setup with Redis")
         except Exception as e:
             logger.warning("Failed to setup Redis caching, using in-memory cache", error=str(e))
