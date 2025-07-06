@@ -1,59 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import { Truck, MapPin, Navigation } from 'lucide-react';
-
-// Mock data
-const mockVehicles = [
-  {
-    id: 'VH001',
-    type: 'delivery_van',
-    lat: 40.7128,
-    lng: -74.0060,
-    status: 'in_use',
-    driver: 'John Doe',
-    currentRoute: 'Route A',
-    capacity: 500,
-    fuelLevel: 85
-  },
-  {
-    id: 'VH002',
-    type: 'truck',
-    lat: 40.7589,
-    lng: -73.9851,
-    status: 'available',
-    driver: 'Jane Smith',
-    currentRoute: 'Route B',
-    capacity: 1000,
-    fuelLevel: 92
-  },
-  {
-    id: 'VH003',
-    type: 'delivery_van',
-    lat: 40.7505,
-    lng: -73.9934,
-    status: 'maintenance',
-    driver: 'Mike Johnson',
-    currentRoute: 'Route C',
-    capacity: 500,
-    fuelLevel: 45
-  }
-];
-
-const mockRoutes = [
-  {
-    id: 'route1',
-    name: 'Route A',
-    path: [
-      [40.7128, -74.0060],
-      [40.7589, -73.9851],
-      [40.7505, -73.9934]
-    ],
-    vehicle: 'VH001',
-    status: 'running'
-  }
-];
+import { supabaseService } from '../services/supabaseService';
 
 const FleetMap: React.FC = () => {
+  const [vehicles, setVehicles] = useState([]);
+  const [routes, setRoutes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFleet = async () => {
+      setLoading(true);
+      const vehiclesData = await supabaseService.getFleet();
+      const routesData = await supabaseService.getRoutes();
+      console.log('Fleet data:', vehiclesData); // Debug log
+      console.log('Routes data:', routesData); // Debug log
+      setVehicles(vehiclesData || []);
+      setRoutes(routesData || []);
+      setLoading(false);
+    };
+    fetchFleet();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -61,20 +37,20 @@ const FleetMap: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Fleet Map</h1>
-            <p className="text-gray-600">Real-time fleet tracking and route visualization</p>
+            <p className="text-gray-600">Real-time vehicle tracking and route optimization</p>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">Available</span>
+              <span className="text-sm text-gray-600">Available ({vehicles.filter(v => v.status === 'available').length})</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">In Use</span>
+              <span className="text-sm text-gray-600">In Transit ({vehicles.filter(v => v.status === 'in_transit').length})</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">Maintenance</span>
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">Maintenance ({vehicles.filter(v => v.status === 'maintenance').length})</span>
             </div>
           </div>
         </div>
@@ -82,88 +58,79 @@ const FleetMap: React.FC = () => {
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        <MapContainer
-          center={[40.7128, -74.0060]}
-          zoom={13}
-          className="h-full w-full"
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
-          
-          {/* Vehicle Markers */}
-          {mockVehicles.map((vehicle) => (
-            <Marker
-              key={vehicle.id}
-              position={[vehicle.lat, vehicle.lng]}
-              icon={L.divIcon({
-                className: 'custom-marker',
-                html: `<div class="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center ${
-                  vehicle.status === 'available' ? 'bg-green-500' :
-                  vehicle.status === 'in_use' ? 'bg-blue-500' :
-                  'bg-yellow-500'
-                }">
-                  <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-                    <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1V8a1 1 0 00-1-1h-3z"/>
-                  </svg>
-                </div>`,
-                iconSize: [32, 32],
-                iconAnchor: [16, 16]
-              })}
-            >
-              <Popup>
-                <div className="p-2">
-                  <h3 className="font-semibold text-gray-900">{vehicle.id}</h3>
-                  <p className="text-sm text-gray-600">{vehicle.type}</p>
-                  <p className="text-sm text-gray-600">Driver: {vehicle.driver}</p>
-                  <p className="text-sm text-gray-600">Route: {vehicle.currentRoute}</p>
-                  <p className="text-sm text-gray-600">Fuel: {vehicle.fuelLevel}%</p>
-                  <p className="text-sm text-gray-600">Capacity: {vehicle.capacity}kg</p>
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+          <div className="text-center">
+            <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Interactive Map</h3>
+            <p className="text-gray-600 mb-4">Map integration would be implemented here</p>
+            
+            {/* Vehicle List */}
+            <div className="max-w-4xl mx-auto">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Fleet Vehicles ({vehicles.length})</h4>
+              {vehicles.length === 0 ? (
+                <div className="text-gray-500">No vehicles found</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {vehicles.map((vehicle) => (
+                    <div key={vehicle.id} className="bg-white p-4 rounded-lg shadow border">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Truck className="w-5 h-5 text-blue-600" />
+                          <span className="font-medium text-gray-900">{vehicle.id}</span>
+                        </div>
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          vehicle.status === 'available' ? 'bg-green-100 text-green-800' :
+                          vehicle.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {vehicle.status?.replace('_', ' ') || 'unknown'}
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <div>Type: {vehicle.vehicle_type || 'Unknown'}</div>
+                        <div>Capacity: {vehicle.capacity || 0} kg</div>
+                        <div>Location: {vehicle.current_location ? `${vehicle.current_location.lat?.toFixed(4)}, ${vehicle.current_location.lng?.toFixed(4)}` : 'Unknown'}</div>
+                        <div>Driver: {vehicle.driver_id || 'Unassigned'}</div>
+                        {vehicle.fuel_level && <div>Fuel: {vehicle.fuel_level * 100}%</div>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </Popup>
-            </Marker>
-          ))}
+              )}
+            </div>
 
-          {/* Route Lines */}
-          {mockRoutes.map((route) => (
-            <Polyline
-              key={route.id}
-              positions={route.path}
-              color="#3b82f6"
-              weight={3}
-              opacity={0.7}
-            />
-          ))}
-        </MapContainer>
-
-        {/* Fleet Stats Panel */}
-        <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 w-64">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Fleet Overview</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Total Vehicles</span>
-              <span className="text-sm font-medium text-gray-900">12</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Available</span>
-              <span className="text-sm font-medium text-green-600">8</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600">In Use</span>
-              <span className="text-sm font-medium text-blue-600">3</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Maintenance</span>
-              <span className="text-sm font-medium text-yellow-600">1</span>
-            </div>
-            <div className="pt-2 border-t border-gray-200">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Avg Fuel Level</span>
-                <span className="text-sm font-medium text-gray-900">87%</span>
+            {/* Routes List */}
+            {routes.length > 0 && (
+              <div className="max-w-4xl mx-auto mt-8">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Active Routes ({routes.length})</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {routes.map((route) => (
+                    <div key={route.id} className="bg-white p-4 rounded-lg shadow border">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Navigation className="w-5 h-5 text-green-600" />
+                          <span className="font-medium text-gray-900">{route.name || route.id}</span>
+                        </div>
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          route.status === 'running' ? 'bg-green-100 text-green-800' :
+                          route.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {route.status || 'unknown'}
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <div>Vehicle: {route.vehicle || 'Unassigned'}</div>
+                        <div>Waypoints: {route.path?.length || 0}</div>
+                        {route.estimated_completion && (
+                          <div>ETA: {new Date(route.estimated_completion).toLocaleString()}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

@@ -4,62 +4,12 @@ Logging models for system monitoring
 
 from datetime import datetime
 from typing import Dict, Any, Optional
-from sqlalchemy import Column, String, Integer, DateTime, JSON, Numeric, ForeignKey, Boolean, Text
+from sqlalchemy import Column, String, Integer, DateTime, JSON, Numeric, Boolean, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
 
 from .base import BaseModel
-
-
-class AgentLog(BaseModel):
-    """Agent log model for tracking agent actions"""
-    
-    __tablename__ = "agent_logs"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    agent_id = Column(UUID(as_uuid=True), ForeignKey('agents.id'), nullable=False)
-    action = Column(String(100), nullable=False)
-    result = Column(JSON)
-    duration_ms = Column(Integer)
-    success = Column(Boolean, default=True)
-    error_message = Column(Text)
-    
-    # Relationships
-    agent = relationship("Agent", backref="logs")
-    
-    def __init__(self, agent_id: str, action: str, result: Dict[str, Any] = None,
-                 duration_ms: int = None, success: bool = True, error_message: str = None, **kwargs):
-        super().__init__(**kwargs)
-        self.agent_id = agent_id
-        self.action = action
-        self.result = result or {}
-        self.duration_ms = duration_ms
-        self.success = success
-        self.error_message = error_message
-    
-    def get_duration_seconds(self) -> float:
-        """Get duration in seconds"""
-        return self.duration_ms / 1000.0 if self.duration_ms else 0.0
-    
-    def is_successful(self) -> bool:
-        """Check if action was successful"""
-        return self.success
-    
-    def has_error(self) -> bool:
-        """Check if action had an error"""
-        return not self.success or bool(self.error_message)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
-        base_dict = super().to_dict()
-        base_dict['duration_seconds'] = self.get_duration_seconds()
-        base_dict['is_successful'] = self.is_successful()
-        base_dict['has_error'] = self.has_error()
-        return base_dict
-    
-    def __repr__(self) -> str:
-        return f"<AgentLog(id={self.id}, agent_id={self.agent_id}, action='{self.action}', success={self.success})>"
 
 
 class SimulationLog(BaseModel):

@@ -38,9 +38,13 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting NeuraRoute application...")
     
-    # Initialize database and Redis
-    await init_connections()
-    logger.info("Database and Redis initialized")
+    # Initialize Redis only (skip local database since we're using Supabase)
+    try:
+        from app.core.database import init_redis
+        await init_redis()
+        logger.info("Redis initialized")
+    except Exception as e:
+        logger.warning(f"Redis initialization failed: {e}")
     
     # Initialize agent manager
     agent_manager = AgentManager()
@@ -65,8 +69,13 @@ async def lifespan(app: FastAPI):
         await agent_manager.stop()
         logger.info("Agent manager stopped")
     
-    await close_connections()
-    logger.info("Database and Redis connections closed")
+    # Close Redis connection
+    try:
+        from app.core.database import close_redis
+        await close_redis()
+        logger.info("Redis connection closed")
+    except Exception as e:
+        logger.warning(f"Error closing Redis: {e}")
 
 
 def create_app() -> FastAPI:
@@ -104,23 +113,21 @@ def create_app() -> FastAPI:
     async def health_check() -> Dict[str, Any]:
         """Health check endpoint"""
         try:
-            # Check database connection
-            from app.core.database import get_db
-            async for db in get_db():
-                break
-            
-            # Check Redis connection
-            from app.core.redis import get_redis
-            redis = await get_redis()
-            await redis.ping()
+            # Check Redis connection (skip local database since we're using Supabase)
+            from app.core.database import redis_client
+            if redis_client:
+                await redis_client.ping()
+                redis_status = "healthy"
+            else:
+                redis_status = "not_initialized"
             
             return {
                 "status": "healthy",
                 "timestamp": asyncio.get_event_loop().time(),
                 "version": "1.0.0",
                 "services": {
-                    "database": "healthy",
-                    "redis": "healthy",
+                    "database": "supabase",  # Using Supabase instead of local DB
+                    "redis": redis_status,
                     "agents": "healthy" if agent_manager else "starting",
                     "simulation": "healthy" if simulation_engine else "starting"
                 }

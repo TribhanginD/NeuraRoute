@@ -20,7 +20,7 @@ function App() {
   const { setSystemStatus, setAgentStatus } = useSystemStore();
   
   // WebSocket connection for real-time updates
-  const { data: wsData } = useWebSocket(process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws');
+  const { data: wsData } = useWebSocket();
   
   // Fetch system health
   const { data: healthData, isLoading: healthLoading } = useQuery(

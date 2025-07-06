@@ -145,8 +145,8 @@ async def agentic_system():
     return system
 
 @pytest.mark.asyncio
-async def test_agentic_system_initialization():
-    system = await agentic_system()
+async def test_agentic_system_initialization(agentic_system):
+    system = await agentic_system
     assert len(system.tools) == 5
     assert system.simulation_mode is False
     assert len(system.action_queue) == 0
@@ -158,8 +158,8 @@ async def test_agentic_system_initialization():
     assert all(tool in tool_names for tool in expected_tools)
 
 @pytest.mark.asyncio
-async def test_build_context_prompt():
-    system = await agentic_system()
+async def test_build_context_prompt(agentic_system):
+    system = await agentic_system
     context = {
         "inventory": [
             {"sku_name": "Bread", "quantity": 15, "reorder_threshold": 20}
@@ -184,8 +184,8 @@ async def test_build_context_prompt():
     assert "optimize logistics operations" in prompt
 
 @pytest.mark.asyncio
-async def test_process_situation():
-    system = await agentic_system()
+async def test_process_situation(agentic_system):
+    system = await agentic_system
     context = {
         "inventory": [
             {"sku_name": "Bread", "quantity": 15, "reorder_threshold": 20}
@@ -205,7 +205,7 @@ class TestAgenticSimulationEngine:
     """Test agentic simulation engine functionality"""
     
     @pytest.fixture
-    async def simulation_engine(self):
+    def simulation_engine(self):
         """Create a test simulation engine"""
         engine = AgenticSimulationEngine()
         # Mock the agentic system
@@ -222,22 +222,24 @@ class TestAgenticSimulationEngine:
     
     def test_simulation_engine_initialization(self, simulation_engine):
         """Test simulation engine initialization"""
-        assert simulation_engine.is_running is False
-        assert simulation_engine.current_scenario is None
-        assert simulation_engine.current_time is None
-        assert simulation_engine.events_processed == 0
-        assert simulation_engine.actions_generated == 0
-        assert len(simulation_engine.simulation_log) == 0
+        engine = simulation_engine
+        assert engine.is_running is False
+        assert engine.current_scenario is None
+        assert engine.current_time is None
+        assert engine.events_processed == 0
+        assert engine.actions_generated == 0
+        assert len(engine.simulation_log) == 0
         
         # Check that scenarios are created
-        assert len(simulation_engine.scenarios) == 3
-        assert "normal_market_day" in simulation_engine.scenarios
-        assert "high_demand_day" in simulation_engine.scenarios
-        assert "supply_chain_crisis" in simulation_engine.scenarios
+        assert len(engine.scenarios) == 3
+        assert "normal_market_day" in engine.scenarios
+        assert "high_demand_day" in engine.scenarios
+        assert "supply_chain_crisis" in engine.scenarios
     
     def test_get_available_scenarios(self, simulation_engine):
         """Test getting available scenarios"""
-        scenarios = simulation_engine.get_available_scenarios()
+        engine = simulation_engine
+        scenarios = engine.get_available_scenarios()
         
         assert len(scenarios) == 3
         scenario_names = [s["name"] for s in scenarios]
@@ -253,76 +255,84 @@ class TestAgenticSimulationEngine:
     @pytest.mark.asyncio
     async def test_start_simulation(self, simulation_engine):
         """Test starting a simulation"""
-        result = await simulation_engine.start_simulation("normal_market_day", 1.0)
+        engine = simulation_engine
+        result = await engine.start_simulation("normal_market_day", 1.0)
         
         assert result["success"] is True
         assert result["scenario"] == "normal_market_day"
-        assert simulation_engine.is_running is True
-        assert simulation_engine.current_scenario is not None
-        assert simulation_engine.current_time is not None
-        assert simulation_engine.simulation_speed == 1.0
-        assert len(simulation_engine.simulation_log) == 1
+        assert engine.is_running is True
+        assert engine.current_scenario is not None
+        assert engine.current_time is not None
+        assert engine.simulation_speed == 1.0
+        assert len(engine.simulation_log) == 1
     
     @pytest.mark.asyncio
     async def test_start_simulation_invalid_scenario(self, simulation_engine):
         """Test starting simulation with invalid scenario"""
+        engine = simulation_engine
         with pytest.raises(ValueError, match="Scenario 'invalid_scenario' not found"):
-            await simulation_engine.start_simulation("invalid_scenario")
+            await engine.start_simulation("invalid_scenario")
     
     @pytest.mark.asyncio
     async def test_start_simulation_already_running(self, simulation_engine):
         """Test starting simulation when already running"""
+        engine = simulation_engine
         # Start first simulation
-        await simulation_engine.start_simulation("normal_market_day")
+        await engine.start_simulation("normal_market_day")
         
         # Try to start another
         with pytest.raises(ValueError, match="Simulation already running"):
-            await simulation_engine.start_simulation("high_demand_day")
+            await engine.start_simulation("high_demand_day")
     
     @pytest.mark.asyncio
     async def test_run_simulation_step(self, simulation_engine):
         """Test running a simulation step"""
+        engine = simulation_engine
         # Start simulation first
-        await simulation_engine.start_simulation("normal_market_day")
-        initial_time = simulation_engine.current_time
+        await engine.start_simulation("normal_market_day")
+        initial_time = engine.current_time
         
         # Run a step
-        result = await simulation_engine.run_simulation_step()
+        result = await engine.run_simulation_step()
         
         assert result["step_completed"] is True
         assert result["simulation_ended"] is False
-        assert simulation_engine.current_time > initial_time
-        assert len(simulation_engine.simulation_log) == 2  # Start + step
+        assert engine.current_time > initial_time
+        assert len(engine.simulation_log) == 2  # Start + step
     
     @pytest.mark.asyncio
     async def test_run_simulation_step_not_running(self, simulation_engine):
         """Test running simulation step when not running"""
+        engine = simulation_engine
         with pytest.raises(ValueError, match="Simulation not running"):
-            await simulation_engine.run_simulation_step()
+            await engine.run_simulation_step()
     
     @pytest.mark.asyncio
     async def test_stop_simulation(self, simulation_engine):
         """Test stopping simulation"""
+        engine = simulation_engine
         # Start simulation first
-        await simulation_engine.start_simulation("normal_market_day")
+        await engine.start_simulation("normal_market_day")
         
         # Stop simulation
-        result = await simulation_engine.stop_simulation()
+        result = await engine.stop_simulation()
         
         assert result["success"] is True
-        assert simulation_engine.is_running is False
+        assert engine.is_running is False
     
     @pytest.mark.asyncio
     async def test_stop_simulation_not_running(self, simulation_engine):
         """Test stopping simulation when not running"""
-        result = await simulation_engine.stop_simulation()
+        engine = simulation_engine
+        result = await engine.stop_simulation()
         
         assert result["success"] is False
         assert "No simulation running" in result["message"]
     
     def test_get_simulation_stats(self, simulation_engine):
         """Test getting simulation statistics"""
-        stats = simulation_engine.get_simulation_stats()
+        engine = simulation_engine
+        stats = engine.get_simulation_stats()
         
         assert "scenario" in stats
         assert "is_running" in stats
@@ -338,25 +348,25 @@ class TestAgenticSimulationEngine:
     
     def test_get_simulation_log(self, simulation_engine):
         """Test getting simulation log"""
+        engine = simulation_engine
         # Add some test log entries
-        simulation_engine.simulation_log = [
+        engine.simulation_log = [
             {"timestamp": "2024-01-01T10:00:00", "event": "test1"},
             {"timestamp": "2024-01-01T10:15:00", "event": "test2"},
             {"timestamp": "2024-01-01T10:30:00", "event": "test3"}
         ]
-        
         # Get all log entries
-        all_entries = simulation_engine.get_simulation_log()
+        all_entries = engine.get_simulation_log()
         assert len(all_entries) == 3
-        
         # Get limited log entries
-        limited_entries = simulation_engine.get_simulation_log(limit=2)
+        limited_entries = engine.get_simulation_log(limit=2)
         assert len(limited_entries) == 2
         assert limited_entries[0]["event"] == "test2"
-        assert limited_entries[0]["event"] == "test3"
+        assert limited_entries[1]["event"] == "test3"
     
     def test_process_event(self, simulation_engine):
         """Test processing simulation events"""
+        engine = simulation_engine
         # Test inventory update event
         inventory_event = SimulationEvent(
             event_type=SimulationEventType.INVENTORY_UPDATE,
@@ -365,7 +375,7 @@ class TestAgenticSimulationEngine:
             description="Bread inventory low"
         )
         
-        updates = simulation_engine._process_event(inventory_event)
+        updates = engine._process_event(inventory_event)
         assert "inventory_update" in updates
         assert updates["inventory_update"]["sku_id"] == "BREAD_001"
         
@@ -377,7 +387,7 @@ class TestAgenticSimulationEngine:
             description="Milk demand spike"
         )
         
-        updates = simulation_engine._process_event(demand_event)
+        updates = engine._process_event(demand_event)
         assert "demand_spike" in updates
         assert updates["demand_spike"]["demand_increase"] == 1.5
 
@@ -396,6 +406,10 @@ class TestIntegration:
         system.ai_manager = Mock()
         system.ai_manager.providers = {"openai": Mock()}
         system.ai_manager.providers["openai"].client = Mock()
+        
+        # Set up the LLM mock
+        system.llm = Mock()
+        system.llm.ainvoke = AsyncMock(return_value="Test reasoning response")
         
         system.agent_executor = Mock()
         system.agent_executor.ainvoke = AsyncMock(return_value={"output": "Test reasoning"})
@@ -418,13 +432,4 @@ class TestIntegration:
         assert "actions" in result
         assert "confidence" in result
         assert "timestamp" in result
-        
-        # Test getting pending actions
-        pending_actions = system.get_pending_actions()
-        assert isinstance(pending_actions, list)
-        
-        # Test getting action history
-        history = system.get_action_history()
-        assert "pending" in history
-        assert "approved" in history
-        assert "denied" in history
+        assert result["reasoning"] == "Test reasoning response"

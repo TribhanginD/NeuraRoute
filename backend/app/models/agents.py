@@ -53,6 +53,8 @@ class ApprovalStatus(str, enum.Enum):
 class Agent(Base, BaseModelMixin):
     """Agent model for autonomous agents"""
     
+    __tablename__ = "agents"
+    
     name = Column(String(100), nullable=False, index=True)
     agent_type = Column(Enum(AgentType), nullable=False, index=True)
     status = Column(Enum(AgentStatus), default=AgentStatus.STOPPED, index=True)
@@ -105,7 +107,9 @@ class Agent(Base, BaseModelMixin):
 class AgentLog(Base, BaseModelMixin):
     """Agent log model for tracking agent activities"""
     
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("agent.id"), nullable=False, index=True)
+    __tablename__ = "agent_logs"
+    
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False, index=True)
     level = Column(String(20), nullable=False, index=True)
     message = Column(Text, nullable=False)
     context = Column(JSON, default={})

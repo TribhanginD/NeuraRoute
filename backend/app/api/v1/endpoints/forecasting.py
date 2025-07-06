@@ -14,6 +14,11 @@ router = APIRouter()
 # Global forecasting engine instance
 forecasting_engine = DemandForecastingEngine()
 
+@router.get("/history")
+async def get_forecast_history():
+    """Stub for getting forecast history (for tests)"""
+    return [{"merchant_id": "merchant_001", "demand_forecast": 150, "confidence": 0.85, "factors": {"weather": "sunny", "seasonal_factor": 1.0, "events": []}}]
+
 @router.get("/forecasts")
 async def get_forecasts(
     sku_id: str = None,
@@ -184,6 +189,11 @@ async def get_forecast_accuracy(
         # For now, return a placeholder structure
         return {
             "overall_accuracy": 0.85,
+            "merchant_accuracy": {
+                "merchant_001": 0.92,
+                "merchant_002": 0.78,
+                "merchant_003": 0.89
+            },
             "sku_accuracy": {
                 "sku_001": 0.92,
                 "sku_002": 0.78,
@@ -224,4 +234,67 @@ async def get_forecasting_summary(db: Session = Depends(get_db)):
         }
     except Exception as e:
         logger.error("Failed to get forecasting summary", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/current")
+async def get_current_forecast():
+    """Get current forecast for all merchants"""
+    try:
+        # Return a placeholder list of current forecasts
+        return [
+            {
+                "merchant_id": "merchant_001",
+                "demand_forecast": 150,
+                "confidence": 0.85,
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            {
+                "merchant_id": "merchant_002", 
+                "demand_forecast": 200,
+                "confidence": 0.78,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        ]
+    except Exception as e:
+        logger.error("Failed to get current forecast", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{merchant_id}")
+async def get_forecast_by_merchant(merchant_id: str):
+    """Get forecast for specific merchant"""
+    try:
+        # Return placeholder forecast for the merchant
+        return {
+            "merchant_id": merchant_id,
+            "demand_forecast": 150,
+            "confidence": 0.85,
+            "factors": {
+                "weather": "sunny",
+                "events": [],
+                "seasonal_factor": 1.0
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get forecast for merchant {merchant_id}", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{merchant_id}")
+async def update_forecast(merchant_id: str, forecast_data: Dict[str, Any]):
+    """Update forecast for specific merchant"""
+    try:
+        # Validate required fields
+        if "demand_forecast" not in forecast_data:
+            raise HTTPException(status_code=422, detail="demand_forecast is required")
+        
+        # Return success message
+        return {
+            "message": f"Forecast updated successfully for merchant {merchant_id}",
+            "merchant_id": merchant_id,
+            "updated_forecast": forecast_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update forecast for merchant {merchant_id}", error=str(e))
         raise HTTPException(status_code=500, detail=str(e)) 

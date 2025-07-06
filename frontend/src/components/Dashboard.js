@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, 
   Truck, 
@@ -10,6 +10,7 @@ import {
   ShoppingCart
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const Dashboard = () => {
   const [simulationStatus, setSimulationStatus] = useState(null);
@@ -21,10 +22,16 @@ const Dashboard = () => {
     agentsActive: 0,
     systemHealth: 'healthy'
   });
+  const [orders, setOrders] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
 
   useEffect(() => {
     fetchSimulationStatus();
     fetchStats();
+    supabaseService.getOrders().then(data => {
+      setOrders(data || []);
+      setRecentOrders((data || []).slice(-5).reverse());
+    });
     const interval = setInterval(() => {
       fetchSimulationStatus();
       fetchStats();
@@ -44,21 +51,15 @@ const Dashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const [inventoryRes, fleetRes, merchantsRes] = await Promise.all([
-        fetch('http://localhost:8000/api/v1/inventory/summary'),
-        fetch('http://localhost:8000/api/v1/fleet/summary'),
-        fetch('http://localhost:8000/api/v1/merchants/summary')
-      ]);
-      
-      const inventoryData = await inventoryRes.json();
-      const fleetData = await fleetRes.json();
-      const merchantsData = await merchantsRes.json();
+      const inventorySummary = await supabaseService.getInventorySummary();
+      const fleetSummary = await supabaseService.getFleetSummary();
+      const merchantsSummary = await supabaseService.getMerchantsSummary();
       
       setStats({
-        activeOrders: merchantsData.pending_orders || 0,
-        activeDeliveries: fleetData.active_routes || 0,
-        availableVehicles: fleetData.available_vehicles || 0,
-        totalInventory: inventoryData.total_items || 0,
+        activeOrders: merchantsSummary.total_count || 0,
+        activeDeliveries: fleetSummary.total_count || 0,
+        availableVehicles: fleetSummary.total_count || 0,
+        totalInventory: inventorySummary.total_count || 0,
         agentsActive: simulationStatus?.agents_active || 0,
         systemHealth: simulationStatus?.system_health || 'healthy'
       });
@@ -67,14 +68,26 @@ const Dashboard = () => {
     }
   };
 
-  const chartData = [
-    { time: '00:00', orders: 12, deliveries: 8 },
-    { time: '04:00', orders: 8, deliveries: 15 },
-    { time: '08:00', orders: 25, deliveries: 22 },
-    { time: '12:00', orders: 35, deliveries: 30 },
-    { time: '16:00', orders: 28, deliveries: 25 },
-    { time: '20:00', orders: 18, deliveries: 12 },
-  ];
+  const chartData = useMemo(() => {
+    // Group orders by hour for the last 24h
+    const now = new Date();
+    const hours = Array.from({ length: 24 }, (_, i) => {
+      const d = new Date(now);
+      d.setHours(i, 0, 0, 0);
+      return d;
+    });
+    return hours.map(hour => {
+      const count = orders.filter(order => {
+        const t = new Date(order.created_at);
+        return t.getHours() === hour.getHours();
+      }).length;
+      return {
+        time: hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        orders: count,
+        deliveries: 0 // If you have deliveries, add logic here
+      };
+    });
+  }, [orders]);
 
   const StatCard = ({ icon: Icon, title, value, change, color }) => (
     <div className="bg-white rounded-lg shadow p-6">
@@ -97,7 +110,7 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6 min-h-screen pb-12 overflow-y-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-600 mt-2">AI-Native Hyperlocal Logistics System Overview</p>
@@ -199,26 +212,63 @@ const Dashboard = () => {
         </div>
         <div className="p-6">
           <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">Route optimization completed for Vehicle #123</span>
-              <span className="text-xs text-gray-400">2 minutes ago</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">New order received from Merchant #456</span>
-              <span className="text-xs text-gray-400">5 minutes ago</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">Inventory restock recommendation generated</span>
-              <span className="text-xs text-gray-400">8 minutes ago</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">Demand forecast updated for SKU #789</span>
-              <span className="text-xs text-gray-400">12 minutes ago</span>
-            </div>
+            {recentOrders.length === 0 && (
+              <div className="text-gray-500">No recent orders.</div>
+            )}
+            {recentOrders.map(order => {
+              // Format the order ID to show only first 8 characters
+              const shortOrderId = order.id ? order.id.substring(0, 8) + '...' : 'Unknown';
+              
+              // Format items for better readability
+              let itemsText = 'No items specified';
+              if (order.items) {
+                if (typeof order.items === 'string') {
+                  // If items is a string, try to parse it or use as is
+                  itemsText = order.items;
+                } else if (Array.isArray(order.items)) {
+                  // If items is an array, join them nicely
+                  itemsText = order.items.join(', ');
+                } else if (typeof order.items === 'object') {
+                  // If items is an object, format it nicely
+                  const itemEntries = Object.entries(order.items);
+                  if (itemEntries.length === 1) {
+                    const [item, quantity] = itemEntries[0];
+                    itemsText = `${quantity} ${item}`;
+                  } else {
+                    itemsText = itemEntries
+                      .map(([item, quantity]) => `${quantity} ${item}`)
+                      .join(', ');
+                  }
+                }
+              }
+              
+              // Format the timestamp
+              const timestamp = order.created_at ? 
+                new Date(order.created_at).toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                }) : 'Unknown time';
+              
+              return (
+                <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg" key={order.id}>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-900">
+                        New order received
+                      </span>
+                      <span className="text-xs text-gray-500">{timestamp}</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Order #{shortOrderId} • {itemsText}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

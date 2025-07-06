@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, MapPin, Map, Clock } from 'lucide-react';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const FleetMap = () => {
   const [vehicles, setVehicles] = useState([]);
@@ -14,25 +15,14 @@ const FleetMap = () => {
 
   const fetchFleetData = async () => {
     try {
-      const [vehiclesRes, routesRes] = await Promise.all([
-        fetch('http://localhost:8000/api/v1/fleet/vehicles'),
-        fetch('http://localhost:8000/api/v1/fleet/routes')
-      ]);
+      const vehiclesData = await supabaseService.getFleet();
+      const routesData = await supabaseService.getRoutes();
       
-      const vehiclesData = await vehiclesRes.json();
-      const routesData = await routesRes.json();
-      
-      setVehicles(vehiclesData.vehicles || []);
+      setVehicles(vehiclesData || []);
       setRoutes(routesData.routes || []);
     } catch (error) {
       console.error('Error fetching fleet data:', error);
     }
-  };
-
-  // Mock map data - in a real implementation, this would use Mapbox GL JS
-  const mockMapData = {
-    center: [37.7749, -122.4194], // San Francisco
-    zoom: 12
   };
 
   return (
@@ -104,14 +94,17 @@ const FleetMap = () => {
                         </div>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           vehicle.status === 'available' ? 'bg-green-100 text-green-800' :
-                          vehicle.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                          vehicle.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
                           {vehicle.status}
                         </span>
                       </div>
                       <div className="mt-2 text-xs text-gray-500">
-                        Load: {vehicle.current_load_kg}kg / {vehicle.capacity_kg}kg
+                        Capacity: {vehicle.capacity}kg
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        Location: {vehicle.current_location}
                       </div>
                     </div>
                   ))}
@@ -145,7 +138,7 @@ const FleetMap = () => {
                     <span className="text-gray-600">Status:</span>
                     <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
                       selectedVehicle.status === 'available' ? 'bg-green-100 text-green-800' :
-                      selectedVehicle.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                      selectedVehicle.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
                       {selectedVehicle.status}
@@ -153,11 +146,11 @@ const FleetMap = () => {
                   </div>
                   <div>
                     <span className="text-gray-600">Capacity:</span>
-                    <span className="ml-2 font-medium">{selectedVehicle.capacity_kg}kg</span>
+                    <span className="ml-2 font-medium">{selectedVehicle.capacity}kg</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Current Load:</span>
-                    <span className="ml-2 font-medium">{selectedVehicle.current_load_kg}kg</span>
+                    <span className="text-gray-600">Location:</span>
+                    <span className="ml-2 font-medium">{selectedVehicle.current_location}</span>
                   </div>
                 </div>
               </div>

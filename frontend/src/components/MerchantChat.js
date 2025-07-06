@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, User, Bot, Clock } from 'lucide-react';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const MerchantChat = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
+  const [merchant, setMerchant] = useState(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -15,28 +17,10 @@ const MerchantChat = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Mock initial messages
   useEffect(() => {
-    setMessages([
-      {
-        id: 1,
-        type: 'bot',
-        content: 'Hello! I\'m your AI logistics assistant. How can I help you today?',
-        timestamp: new Date(Date.now() - 60000)
-      },
-      {
-        id: 2,
-        type: 'user',
-        content: 'I need to check the status of my recent order #12345',
-        timestamp: new Date(Date.now() - 45000)
-      },
-      {
-        id: 3,
-        type: 'bot',
-        content: 'I\'ll check that for you. Order #12345 is currently in transit and expected to be delivered by 3:00 PM today. Your delivery vehicle is 15 minutes away.',
-        timestamp: new Date(Date.now() - 30000)
-      }
-    ]);
+    supabaseService.getMerchantByName('Merchant One')
+      .then(setMerchant)
+      .catch(console.error);
   }, []);
 
   const sendMessage = async () => {
@@ -94,6 +78,8 @@ const MerchantChat = () => {
   const formatTime = (timestamp) => {
     return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  if (!merchant) return <div>Loading Merchant One...</div>;
 
   return (
     <div className="p-6">

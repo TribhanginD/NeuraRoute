@@ -5,7 +5,7 @@ Configuration settings for NeuraRoute
 import os
 from typing import List, Optional
 from pydantic import validator
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from dotenv import load_dotenv; load_dotenv()
 
 
@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://postgres:neuraroute123@localhost:5432/neuraroute"
     REDIS_URL: str = "redis://localhost:6379"
+    
+    # Supabase Configuration
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
     
     # AI/ML API Keys
     OPENAI_API_KEY: Optional[str] = None

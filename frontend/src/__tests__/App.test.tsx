@@ -88,7 +88,7 @@ describe('App Component', () => {
     };
     
     // Trigger WebSocket message
-    const ws = new WebSocket('ws://localhost:8000/ws');
+    const ws = new WebSocket('ws://localhost:8000/api/v1/agentic/ws');
     ws.onmessage?.({ data: JSON.stringify(mockMessage) } as MessageEvent);
     
     await waitFor(() => {

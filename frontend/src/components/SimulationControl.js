@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, Square, RotateCcw, Settings } from 'lucide-react';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const SimulationControl = () => {
   const [simulationStatus, setSimulationStatus] = useState(null);
@@ -13,9 +14,8 @@ const SimulationControl = () => {
 
   const fetchSimulationStatus = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/simulation/status');
-      const data = await response.json();
-      setSimulationStatus(data);
+      const status = await supabaseService.getSimulationStatus();
+      setSimulationStatus(status);
     } catch (error) {
       console.error('Error fetching simulation status:', error);
     }
@@ -23,10 +23,8 @@ const SimulationControl = () => {
 
   const controlSimulation = async (action) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/simulation/${action}`, {
-        method: 'POST',
-      });
-      if (response.ok) {
+      const result = await supabaseService.simulationAction(action);
+      if (result.ok) {
         fetchSimulationStatus();
       }
     } catch (error) {
@@ -36,11 +34,8 @@ const SimulationControl = () => {
 
   const setSimulationSpeed = async (newSpeed) => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/simulation/speed', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ speed_multiplier: newSpeed }),
-      });
+      const speed = await supabaseService.getSimulationSpeed();
+      const response = await supabaseService.setSimulationSpeed(newSpeed);
       if (response.ok) {
         setSpeed(newSpeed);
         fetchSimulationStatus();

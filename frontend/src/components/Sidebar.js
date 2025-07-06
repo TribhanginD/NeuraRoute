@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { useSystemStore } from '../stores/systemStore';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -112,7 +113,7 @@ const Sidebar = ({ open, setOpen }) => {
                 </div>
                 <div className="flex items-center space-x-1">
                   <Activity className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-500">{runningAgents} running</span>
+                  <span className="text-sm text-gray-500">{activeAgents} running</span>
                 </div>
               </div>
               

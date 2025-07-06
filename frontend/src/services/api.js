@@ -132,7 +132,6 @@ export const apiService = {
   updateOrder: (id, data) => api.put(endpoints.fleet.order(id), data),
   
   // Inventory
-  getSKUs: (params) => api.get(endpoints.inventory.skus, { params }),
   getSKU: (id) => api.get(endpoints.inventory.sku(id)),
   createSKU: (data) => api.post(endpoints.inventory.skus, data),
   updateSKU: (id, data) => api.put(endpoints.inventory.sku(id), data),

@@ -1,27 +1,6 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: neuraroute-postgres
-    environment:
-      POSTGRES_DB: neuraroute
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: neuraroute123
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backend/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-    networks:
-      - neuraroute-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d neuraroute"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
   # Redis Cache
   redis:
     image: redis:7-alpine
@@ -47,7 +26,6 @@ services:
     env_file:
       - ./.env
     environment:
-      - DATABASE_URL=postgresql://postgres:neuraroute123@postgres:5432/neuraroute
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -60,8 +38,6 @@ services:
       - ./backend:/app
       - ./logs:/app/logs
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -86,24 +62,6 @@ services:
       - neuraroute-network
     restart: unless-stopped
 
-  # Optional: pgAdmin for database management
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: neuraroute-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@neuraroute.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      - postgres
-    networks:
-      - neuraroute-network
-    profiles:
-      - tools
-
   # Optional: Redis Commander for Redis management
   redis-commander:
     image: rediscommander/redis-commander:latest
@@ -120,11 +78,7 @@ services:
       - tools
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
-    driver: local
-  pgadmin_data:
     driver: local
 
 networks:

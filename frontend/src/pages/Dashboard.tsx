@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from 'react-query';
 import { 
   TrendingUp, 
@@ -10,31 +10,48 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-// Mock data - replace with actual API calls
-const mockMetrics = {
-  totalOrders: 156,
-  activeAgents: 5,
-  vehiclesAvailable: 12,
-  inventoryItems: 45,
-  systemHealth: 98,
-  pendingDeliveries: 23
-};
-
-const mockChartData = [
-  { time: '00:00', orders: 12, deliveries: 8 },
-  { time: '04:00', orders: 8, deliveries: 15 },
-  { time: '08:00', orders: 25, deliveries: 22 },
-  { time: '12:00', orders: 35, deliveries: 28 },
-  { time: '16:00', orders: 28, deliveries: 35 },
-  { time: '20:00', orders: 18, deliveries: 20 },
-];
+import { supabaseService } from '../services/supabaseService';
 
 const Dashboard: React.FC = () => {
-  const { data: metrics, isLoading } = useQuery('dashboard-metrics', () => {
-    // Simulate API call
-    return new Promise(resolve => setTimeout(() => resolve(mockMetrics), 1000));
+  const [metrics, setMetrics] = useState({
+    totalOrders: 0,
+    activeAgents: 0,
+    vehiclesAvailable: 0,
+    inventoryItems: 0,
+    systemHealth: 0,
+    pendingDeliveries: 0
   });
+  const [chartData, setChartData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      // Fetch metrics from Supabase
+      const orders = await supabaseService.getOrders();
+      const agents = await supabaseService.getAgents();
+      const vehicles = await supabaseService.getFleet();
+      const inventory = await supabaseService.getInventory();
+      // Example: systemHealth and pendingDeliveries can be calculated or fetched as needed
+      setMetrics({
+        totalOrders: orders.length,
+        activeAgents: agents.length,
+        vehiclesAvailable: vehicles.length,
+        inventoryItems: inventory.length,
+        systemHealth: 100, // Placeholder, replace with real health metric if available
+        pendingDeliveries: orders.filter(o => o.status === 'pending').length
+      });
+      // For chart data, you may want to aggregate orders/deliveries by time
+      // Here is a placeholder for real chart data
+      setChartData(orders.slice(0, 6).map((order, idx) => ({
+        time: order.created_at || `T${idx}`,
+        orders: 1,
+        deliveries: order.status === 'delivered' ? 1 : 0
+      })));
+      setIsLoading(false);
+    };
+    fetchData();
+  }, []);
 
   if (isLoading) {
     return (
@@ -138,7 +155,7 @@ const Dashboard: React.FC = () => {
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Orders & Deliveries</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={mockChartData}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="time" />
               <YAxis />

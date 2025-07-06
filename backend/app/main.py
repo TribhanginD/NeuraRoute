@@ -7,12 +7,14 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Any
+from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 import structlog
+import json
 
 from app.core.config import settings
 from app.core.database import async_engine, Base, get_db
@@ -53,13 +55,13 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting NeuraRoute application...")
     
-    # Initialize database
+    # Initialize database and Redis connections
     try:
-        async with async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database initialized successfully")
+        from app.core.database import init_connections
+        await init_connections()
+        logger.info("Database and Redis initialized successfully")
     except Exception as e:
-        logger.error("Failed to initialize database", error=str(e))
+        logger.error("Failed to initialize database and Redis", error=str(e))
         raise
     
     # Initialize agent manager
@@ -74,7 +76,6 @@ async def lifespan(app: FastAPI):
     # Initialize simulation engine
     try:
         simulation_engine = SimulationEngine()
-        await simulation_engine.initialize()
         logger.info("Simulation engine initialized successfully")
     except Exception as e:
         logger.error("Failed to initialize simulation engine", error=str(e))
@@ -88,10 +89,18 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down NeuraRoute application...")
     
     if simulation_engine:
-        await simulation_engine.shutdown()
+        await simulation_engine.stop()
     
     if agent_manager:
-        await agent_manager.shutdown()
+        await agent_manager.stop()
+    
+    # Close database and Redis connections
+    try:
+        from app.core.database import close_connections
+        await close_connections()
+        logger.info("Database and Redis connections closed")
+    except Exception as e:
+        logger.error("Failed to close database and Redis connections", error=str(e))
     
     logger.info("NeuraRoute application shutdown complete")
 
@@ -141,17 +150,18 @@ async def health_check():
     try:
         # Check database connection
         async with async_engine.begin() as conn:
-            await conn.execute("SELECT 1")
+            from sqlalchemy import text
+            await conn.execute(text("SELECT 1"))
         
         # Check Redis connection
         from app.core.database import redis_client
         await redis_client.ping()
         
         # Check agent manager
-        agent_status = "healthy" if agent_manager and agent_manager.is_healthy() else "unhealthy"
+        agent_status = "healthy" if agent_manager and agent_manager.is_running else "unhealthy"
         
         # Check simulation engine
-        sim_status = "healthy" if simulation_engine and simulation_engine.is_healthy() else "unhealthy"
+        sim_status = "healthy" if simulation_engine and simulation_engine.is_running() else "stopped"
         
         return {
             "status": "healthy",
@@ -202,39 +212,26 @@ def get_agent_manager() -> AgentManager:
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
-async def websocket_endpoint(websocket):
-    """WebSocket endpoint for real-time updates"""
-    try:
+async def websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
-        logger.info("WebSocket connection established")
-        
-        # Send initial system status
+    while True:
+        try:
+            data = await websocket.receive_json()
+            if data.get("type") == "subscribe" and data.get("channel") == "simulation":
         await websocket.send_json({
-            "type": "system_status",
-            "data": {
-                "simulation_status": simulation_engine.get_status() if simulation_engine else "unknown",
-                "active_agents": len(agent_manager.get_active_agents()) if agent_manager else 0
-            }
-        })
-        
-        # Keep connection alive and send updates
-        while True:
-            # Send periodic updates
-            await asyncio.sleep(5)
-            
-            if simulation_engine and agent_manager:
-                await websocket.send_json({
-                    "type": "update",
-                    "data": {
-                        "simulation_tick": simulation_engine.get_current_tick(),
-                        "agent_status": agent_manager.get_status_summary()
-                    }
+                    "type": "subscription_confirmed",
+                    "channel": "simulation",
+                    "timestamp": datetime.utcnow().isoformat()
                 })
-                
-    except Exception as e:
-        logger.error("WebSocket error", error=str(e))
-    finally:
-        logger.info("WebSocket connection closed")
+            elif data.get("type") == "ping":
+                await websocket.send_json({
+                    "type": "pong",
+                    "data": data.get("data", ""),
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+        except Exception:
+            break
+    await websocket.close()
 
 
 if __name__ == "__main__":

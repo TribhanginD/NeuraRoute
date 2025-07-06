@@ -357,6 +357,9 @@ Available tools:
 - dispatch_fleet: Assign vehicles to routes
 
 Always provide clear reasoning for your decisions and consider the broader impact on the logistics network."""
+        
+        # Default prompt template (will be updated during initialization)
+        self.prompt_template = self.system_prompt + "\n\nContext: {context}\n\nBased on this information, provide recommendations for logistics optimization."
 
     async def initialize(self):
         """Initialize the agentic system"""
@@ -372,6 +375,21 @@ Always provide clear reasoning for your decisions and consider the broader impac
         await self._create_agent()
         
         logger.info("Agentic System initialized successfully")
+    
+    async def shutdown(self):
+        """Shutdown the agentic system"""
+        logger.info("Shutting down Agentic System")
+        
+        # Clear action queues
+        self.action_queue.clear()
+        self.approved_actions.clear()
+        self.denied_actions.clear()
+        
+        # Clear tool action histories
+        for tool in self.tools:
+            tool.action_history.clear()
+        
+        logger.info("Agentic System shutdown complete")
     
     def _initialize_tools(self):
         """Initialize all available tools"""
@@ -394,7 +412,6 @@ Always provide clear reasoning for your decisions and consider the broader impac
             llm = default_provider.client
             # Use a simple prompt and direct LLM call instead of LLMChain
             self.llm = llm
-            self.prompt_template = self.system_prompt + "\n\nContext: {context}\n\nBased on this information, provide recommendations for logistics optimization."
             logger.info("Agentic system initialized with direct LLM call")
         except Exception as e:
             logger.error(f"Failed to create agentic system: {str(e)}")
