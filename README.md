@@ -8,7 +8,7 @@ An intelligent operating system for small city sectors, featuring autonomous age
 - **LCM-Style Demand Forecaster**: AI-powered demand prediction using structured context
 - **LAM-Style Autonomous Agents**: Goal-driven planners executing toolchains
 - **🆕 Agentic AI System**: Autonomous decision-making with approval workflows
-- **15-Minute Tick Simulation**: Real-time state updates in local database
+- **15-Minute Tick Simulation**: Real-time state updates in Supabase
 - **Professional Frontend**: Modern UI with merchant chat, ops console, live route map, agent logs, and simulation playback
 
 ### AI/ML Capabilities
@@ -37,16 +37,12 @@ An intelligent operating system for small city sectors, featuring autonomous age
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   Database      │
-│   (React)       │◄──►│   (FastAPI)     │◄──►│   (PostgreSQL)  │
+│   Frontend      │    │   Supabase      │    │   Redis Cache   │
+│   (React)       │◄──►│   (Database)    │◄──►│   (Caching)     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          │              ┌─────────────────┐              │
-         └──────────────►│   Redis Cache   │◄─────────────┘
-                        └─────────────────┘
-                                │
-                        ┌─────────────────┐
-                        │   AI/ML Engine  │
+         └──────────────►│   AI/ML Engine  │◄─────────────┘
                         │   (LangChain)   │
                         └─────────────────┘
                                 │
@@ -58,15 +54,10 @@ An intelligent operating system for small city sectors, featuring autonomous age
 
 ## 🛠️ Tech Stack
 
-### Backend
-- **Python 3.11+** with FastAPI
-- **PostgreSQL** for primary database
+### Data Layer
+- **Supabase** for primary database and real-time subscriptions
 - **Redis** for caching and session management
-- **LangChain** for AI/ML orchestration
-- **🆕 LangChain Agents** for autonomous decision-making
-- **FAISS/Chroma** for vector memory
-- **SQLAlchemy** for ORM
-- **Pydantic** for data validation
+- **PostgreSQL** (via Supabase) for data storage
 
 ### Frontend
 - **React 18** with TypeScript
@@ -75,6 +66,7 @@ An intelligent operating system for small city sectors, featuring autonomous age
 - **React Query** for data fetching
 - **Zustand** for state management
 - **🆕 Agentic UI Components** for action approval and simulation
+- **Supabase JS Client** for database operations
 
 ### AI/ML
 - **GPT-4o** and **Anthropic Claude** for reasoning
@@ -90,7 +82,7 @@ An intelligent operating system for small city sectors, featuring autonomous age
 ### Prerequisites
 - Docker and Docker Compose
 - Node.js 18+ (for development)
-- Python 3.11+ (for development)
+- **🆕 Supabase account and project**
 - **🆕 OpenAI API key or Anthropic API key**
 
 ### Quick Start
@@ -102,35 +94,29 @@ cd NeuraRoute
 # Copy environment template
 cp .env.example .env
 
-# Configure AI API keys
+# Configure Supabase and AI API keys
+echo "REACT_APP_SUPABASE_URL=your_supabase_url" >> .env
+echo "REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key" >> .env
 echo "OPENAI_API_KEY=your_openai_api_key" >> .env
 echo "ANTHROPIC_API_KEY=your_anthropic_api_key" >> .env
 
-# Start all services
+# Start services
 ./start.sh
 
 # Access the application
 # Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
 # 🆕 Agentic Dashboard: http://localhost:3000/agentic
 ```
 
 ### Manual Setup
 ```bash
-# Backend setup
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
 # Frontend setup
 cd frontend
 npm install
 
-# Database setup
-docker-compose up -d postgres redis
-python backend/scripts/init_db.py
+# Start services
+docker-compose up -d redis
+npm start
 ```
 
 ## 🚀 Usage
@@ -141,51 +127,21 @@ python backend/scripts/init_db.py
 ./start.sh
 
 # Or manually
-docker-compose up -d
-cd backend && python main.py
+docker-compose up -d redis
 cd frontend && npm start
 ```
 
 ### 🆕 Agentic AI Usage
 
 #### Process a Situation
-```bash
-curl -X POST http://localhost:8000/api/v1/agentic/process-situation \
-  -H "Content-Type: application/json" \
-  -d '{
-    "inventory": [
-      {"sku_name": "Fresh Bread", "quantity": 15, "reorder_threshold": 20}
-    ],
-    "demand_forecast": [
-      {"sku_name": "Fresh Bread", "predicted_demand": 30}
-    ],
-    "deliveries": [
-      {"driver_id": "DRV_001", "status": "in_transit", "estimated_arrival": "10:30"}
-    ],
-    "market_conditions": {
-      "weather": "Sunny",
-      "events": "Local farmers market",
-      "traffic": "Moderate"
-    }
-  }'
-```
+The agentic system can process situations through the frontend interface:
+
+1. Navigate to the Agentic Dashboard at `http://localhost:3000/agentic`
+2. Use the interface to input situation data
+3. Review and approve/deny agent actions
+4. Monitor the impact of decisions in real-time
 
 #### Run Market Day Simulation
-```bash
-# Start simulation
-curl -X POST "http://localhost:8000/api/v1/agentic/simulation/start?scenario_name=normal_market_day&speed=1.0"
-
-# Run simulation steps
-curl -X POST http://localhost:8000/api/v1/agentic/simulation/step
-
-# Get pending actions
-curl http://localhost:8000/api/v1/agentic/pending-actions
-
-# Approve an action
-curl -X POST http://localhost:8000/api/v1/agentic/actions/{action_id}/approve
-```
-
-### Simulation Control
 1. Access the Operations Console at `http://localhost:3000`
 2. Use the Simulation Control panel to start/stop the 15-minute tick loop
 3. **🆕 Use the Agentic Dashboard for autonomous action approval**
@@ -193,164 +149,46 @@ curl -X POST http://localhost:8000/api/v1/agentic/actions/{action_id}/approve
 5. View live routes on the Fleet Map
 6. Chat with merchants through the Merchant Chat interface
 
-### API Endpoints
-- `GET /api/v1/health` - System health check
-- `GET /api/v1/agents` - List all agents
-- `POST /api/v1/simulation/start` - Start simulation
-- `POST /api/v1/simulation/stop` - Stop simulation
-- `GET /api/v1/forecast` - Get demand forecast
-- `GET /api/v1/routes` - Get current routes
+### Database Setup
+1. Create a Supabase project
+2. Run the SQL scripts in `database/` to set up tables
+3. Configure environment variables with your Supabase credentials
+4. The frontend will automatically connect to Supabase for all data operations
 
-### 🆕 Agentic API Endpoints
-- `POST /api/v1/agentic/process-situation` - Process situation and generate actions
-- `GET /api/v1/agentic/pending-actions` - Get actions requiring approval
-- `POST /api/v1/agentic/actions/{id}/approve` - Approve an action
-- `POST /api/v1/agentic/actions/{id}/deny` - Deny an action
-- `GET /api/v1/agentic/action-history` - Get complete action history
-- `GET /api/v1/agentic/simulation/scenarios` - Get available simulation scenarios
-- `POST /api/v1/agentic/simulation/start` - Start simulation
-- `POST /api/v1/agentic/simulation/auto-run` - Auto-run complete simulation
+## 📊 Database Schema
 
-## 🤖 AI/ML Features
+The system uses the following Supabase tables:
+- `fleet` - Vehicle and driver information
+- `merchants` - Merchant profiles and locations
+- `inventory` - Product inventory and stock levels
+- `orders` - Customer orders and delivery information
+- `agents` - AI agent configurations and status
+- `agentic_actions` - Pending and historical agent actions
+- `agent_decisions` - Agent decision history
+- `simulation_status` - Current simulation state
+- `agent_plans` - Agent execution plans
 
-### Demand Forecasting (LCM-Style)
-- **Structured Context Building**: Weather, events, historical data, seasonal factors
-- **AI Reasoning**: GPT-4o and Claude for demand prediction
-- **Fallback Heuristics**: Rule-based forecasting when AI unavailable
-- **Real-time Updates**: 15-minute intervals with context refresh
+## 🔧 Development
 
-### Autonomous Agents (LAM-Style)
-- **Goal-Driven Planning**: Each agent has specific objectives and constraints
-- **Toolchain Execution**: Agents use specialized tools for their domain
-- **Memory Management**: Persistent memory with vector storage
-- **Health Monitoring**: Automatic restart on failure
-
-### 🆕 Agentic AI System
-- **Autonomous Decision Making**: LangChain agents with function-calling capabilities
-- **Smart Approval Workflows**: Automatic approval for low-risk actions, manual approval for high-value decisions
-- **Tool Integration**: place_order, reroute_driver, update_inventory, adjust_pricing, dispatch_fleet
-- **Market Day Simulations**: Predefined scenarios for testing and demonstration
-- **Real-time Action Monitoring**: Live tracking of agent decisions and their impact
-
-### Agent Types
-1. **Restock Agent**: Inventory management and replenishment
-2. **Route Agent**: Dynamic route optimization
-3. **Pricing Agent**: Dynamic pricing based on demand
-4. **Dispatch Agent**: Fleet coordination and task assignment
-5. **Forecasting Agent**: Demand prediction and trend analysis
-6. **🆕 Agentic System**: Autonomous decision-making and action-taking
-
-## 📊 Monitoring & Analytics
-
-### Real-time Metrics
-- Agent performance and health
-- Fleet utilization and efficiency
-- Demand forecast accuracy
-- Route optimization metrics
-- System resource usage
-- **🆕 Agentic action approval rates and execution success**
-
-### Logging
-- Structured JSON logging
-- Agent action logs
-- Error tracking and alerting
-- Performance analytics
-- **🆕 Complete audit trail of agentic decisions**
-
-## 🔒 Security
-
-### Authentication
-- JWT-based authentication
-- Role-based access control
-- API key management
-
-### Data Protection
-- Encrypted data transmission
-- Secure database connections
-- Environment variable management
-
-### 🆕 Agentic Security
-- **Approval Workflows**: All high-value actions require manual approval
-- **Audit Trail**: Complete history of all decisions and approvals
-- **Input Validation**: Comprehensive validation of all agentic actions
-- **Rate Limiting**: Protection against abuse of autonomous systems
-
-## 🧪 Testing
-
-### Backend Tests
+### Frontend Development
 ```bash
-cd backend
-pytest tests/
-
-# 🆕 Test agentic system specifically
-pytest tests/test_agentic_system.py -v
+cd frontend
+npm install
+npm start
 ```
 
-### Frontend Tests
+### Database Development
+```bash
+# Run SQL scripts in Supabase SQL editor
+# See database/ directory for schema files
+```
+
+### Testing
 ```bash
 cd frontend
 npm test
 ```
 
-### 🆕 Agentic System Testing
-```bash
-# Test simulation scenarios
-curl -X POST "http://localhost:8000/api/v1/agentic/simulation/auto-run?scenario_name=normal_market_day"
+## 📝 License
 
-# Test tool execution
-curl -X POST http://localhost:8000/api/v1/agentic/tools/place_order/execute \
-  -H "Content-Type: application/json" \
-  -d '{"supplier_id": "SUP_001", "sku_id": "SKU_001", "quantity": 100}'
-```
-
-## 📚 Documentation
-
-- **🆕 [Agentic System Documentation](backend/AGENTIC_SYSTEM.md)** - Comprehensive guide to the agentic AI system
-- **API Documentation**: Available at `http://localhost:8000/docs`
-- **Frontend TypeScript Interfaces**: `frontend/src/types/agentic.ts`
-
-## 🚀 Quick Demo
-
-### 1. Start the System
-```bash
-./start.sh
-```
-
-### 2. Run Market Day Simulation
-```bash
-# Auto-run a complete market day simulation
-curl -X POST "http://localhost:8000/api/v1/agentic/simulation/auto-run?scenario_name=high_demand_day&speed=2.0"
-```
-
-### 3. Monitor Actions
-```bash
-# Check for pending actions
-curl http://localhost:8000/api/v1/agentic/pending-actions
-
-# View action history
-curl http://localhost:8000/api/v1/agentic/action-history
-```
-
-### 4. Access the Dashboard
-- Open `http://localhost:3000/agentic` in your browser
-- View real-time agentic actions and approvals
-- Monitor simulation progress
-- Approve or deny pending actions
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Documentation**: Check the [Agentic System Documentation](backend/AGENTIC_SYSTEM.md)
-- **Issues**: Create an issue on GitHub
-- **Discussions**: Use GitHub Discussions for questions and ideas 
+This project is licensed under the MIT License - see the LICENSE file for details. 

@@ -13,7 +13,7 @@ import MerchantChat from './components/MerchantChat';
 
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSystemStore } from './stores/systemStore';
-import { api } from './services/api';
+import { supabaseService } from './services/supabaseService.ts';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -22,10 +22,10 @@ function App() {
   // WebSocket connection for real-time updates
   const { data: wsData } = useWebSocket();
   
-  // Fetch system health
+  // Fetch system health from Supabase
   const { data: healthData, isLoading: healthLoading } = useQuery(
     'health',
-    () => api.get('/health'),
+    () => supabaseService.getSystemHealth(),
     {
       refetchInterval: 30000, // 30 seconds
       retry: 3,

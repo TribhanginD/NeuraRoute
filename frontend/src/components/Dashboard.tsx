@@ -10,10 +10,9 @@ import {
   ShoppingCart
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const Dashboard = () => {
-  const [simulationStatus, setSimulationStatus] = useState(null);
   const [stats, setStats] = useState({
     activeOrders: 0,
     activeDeliveries: 0,
@@ -26,46 +25,22 @@ const Dashboard = () => {
   const [recentOrders, setRecentOrders] = useState([]);
 
   useEffect(() => {
-    fetchSimulationStatus();
     fetchStats();
     supabaseService.getOrders().then(data => {
       setOrders(data || []);
       setRecentOrders((data || []).slice(-5).reverse());
     });
     const interval = setInterval(() => {
-      fetchSimulationStatus();
       fetchStats();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchSimulationStatus = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/v1/simulation/status');
-      const data = await response.json();
-      setSimulationStatus(data);
-    } catch (error) {
-      console.error('Error fetching simulation status:', error);
-    }
-  };
-
   const fetchStats = async () => {
-    try {
-      const inventorySummary = await supabaseService.getInventorySummary();
-      const fleetSummary = await supabaseService.getFleetSummary();
-      const merchantsSummary = await supabaseService.getMerchantsSummary();
-      
-      setStats({
-        activeOrders: merchantsSummary.total_count || 0,
-        activeDeliveries: fleetSummary.total_count || 0,
-        availableVehicles: fleetSummary.total_count || 0,
-        totalInventory: inventorySummary.total_count || 0,
-        agentsActive: simulationStatus?.agents_active || 0,
-        systemHealth: simulationStatus?.system_health || 'healthy'
-      });
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
+    // Example: fetch stats from Supabase tables
+    // You can aggregate stats here as needed
+    // For now, just set systemHealth to 'healthy'
+    setStats((prev) => ({ ...prev, systemHealth: 'healthy' }));
   };
 
   const chartData = useMemo(() => {
@@ -115,26 +90,6 @@ const Dashboard = () => {
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-600 mt-2">AI-Native Hyperlocal Logistics System Overview</p>
       </div>
-
-      {/* Simulation Status */}
-      {simulationStatus && (
-        <div className="mb-6">
-          <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium ${
-            simulationStatus.is_running 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-red-100 text-red-800'
-          }`}>
-            <Activity className="h-4 w-4 mr-2" />
-            Simulation {simulationStatus.is_running ? 'Running' : 'Stopped'}
-            {simulationStatus.is_running && (
-              <span className="ml-2">
-                Tick: {simulationStatus.tick_count} | 
-                Time: {new Date(simulationStatus.current_time).toLocaleTimeString()}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

@@ -411,33 +411,6 @@ export class SupabaseService {
     }
   }
 
-  // Agent operations (placeholder - you may need to create an agents table)
-  async getAgents(): Promise<any[]> {
-    // For now, return empty array since agents table may not exist
-    // You can create an agents table in Supabase if needed
-    console.log('Agents table not implemented yet')
-    return []
-  }
-
-  // Route operations (placeholder - you may need to create a routes table)
-  async getRoutes(): Promise<any[]> {
-    // For now, return empty array since routes table may not exist
-    // You can create a routes table in Supabase if needed
-    console.log('Routes table not implemented yet')
-    return []
-  }
-
-  // Weather operations (placeholder)
-  async getWeather(): Promise<any> {
-    // For now, return mock weather data
-    return {
-      condition: 'sunny',
-      temperature: 25,
-      humidity: 60,
-      wind_speed: 10
-    }
-  }
-
   // System health operations (placeholder)
   async getSystemHealth(): Promise<any> {
     // For now, return mock health data
@@ -446,6 +419,296 @@ export class SupabaseService {
       redis: 'healthy',
       agents: 'healthy',
       simulation: 'healthy'
+    }
+  }
+
+  // Agentic Actions and Decisions
+  async getPendingActions(): Promise<any[]> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('agentic_actions')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching pending actions:', error)
+        return []
+      }
+      
+      return data || []
+    } catch (err) {
+      console.error('Exception fetching pending actions:', err)
+      return []
+    }
+  }
+
+  async getAgenticStatus(): Promise<any> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('simulation_status')
+        .select('*')
+        .single()
+      
+      if (error) {
+        console.error('Error fetching agentic status:', error)
+        return {
+          is_running: false,
+          tick_count: 0,
+          current_time: new Date().toISOString(),
+          agents_active: 0,
+          system_health: 'healthy'
+        }
+      }
+      
+      return data || {
+        is_running: false,
+        tick_count: 0,
+        current_time: new Date().toISOString(),
+        agents_active: 0,
+        system_health: 'healthy'
+      }
+    } catch (err) {
+      console.error('Exception fetching agentic status:', err)
+      return {
+        is_running: false,
+        tick_count: 0,
+        current_time: new Date().toISOString(),
+        agents_active: 0,
+        system_health: 'healthy'
+      }
+    }
+  }
+
+  async getAgentPlan(): Promise<any> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('agent_plans')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      
+      if (error) {
+        console.error('Error fetching agent plan:', error)
+        return null
+      }
+      
+      return data
+    } catch (err) {
+      console.error('Exception fetching agent plan:', err)
+      return null
+    }
+  }
+
+  async getActionHistory(): Promise<any[]> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('agentic_actions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      
+      if (error) {
+        console.error('Error fetching action history:', error)
+        return []
+      }
+      
+      return data || []
+    } catch (err) {
+      console.error('Exception fetching action history:', err)
+      return []
+    }
+  }
+
+  async approveAction(actionId: string): Promise<boolean> {
+    try {
+      const { error } = await typedSupabase
+        .from('agentic_actions')
+        .update({ 
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', actionId)
+      
+      if (error) {
+        console.error('Error approving action:', error)
+        return false
+      }
+      
+      return true
+    } catch (err) {
+      console.error('Exception approving action:', err)
+      return false
+    }
+  }
+
+  async denyAction(actionId: string): Promise<boolean> {
+    try {
+      const { error } = await typedSupabase
+        .from('agentic_actions')
+        .update({ 
+          status: 'denied',
+          denied_at: new Date().toISOString()
+        })
+        .eq('id', actionId)
+      
+      if (error) {
+        console.error('Error denying action:', error)
+        return false
+      }
+      
+      return true
+    } catch (err) {
+      console.error('Exception denying action:', err)
+      return false
+    }
+  }
+
+  // Agent Decisions
+  async getPendingAgentDecisions(): Promise<any[]> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('agent_decisions')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching pending agent decisions:', error)
+        return []
+      }
+      
+      return data || []
+    } catch (err) {
+      console.error('Exception fetching pending agent decisions:', err)
+      return []
+    }
+  }
+
+  async getAgentDecisionHistory(): Promise<any[]> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('agent_decisions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      
+      if (error) {
+        console.error('Error fetching agent decision history:', error)
+        return []
+      }
+      
+      return data || []
+    } catch (err) {
+      console.error('Exception fetching agent decision history:', err)
+      return []
+    }
+  }
+
+  async approveAgentDecision(decisionId: string): Promise<boolean> {
+    try {
+      const { error } = await typedSupabase
+        .from('agent_decisions')
+        .update({ 
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', decisionId)
+      
+      if (error) {
+        console.error('Error approving agent decision:', error)
+        return false
+      }
+      
+      return true
+    } catch (err) {
+      console.error('Exception approving agent decision:', err)
+      return false
+    }
+  }
+
+  async denyAgentDecision(decisionId: string): Promise<boolean> {
+    try {
+      const { error } = await typedSupabase
+        .from('agent_decisions')
+        .update({ 
+          status: 'denied',
+          denied_at: new Date().toISOString()
+        })
+        .eq('id', decisionId)
+      
+      if (error) {
+        console.error('Error denying agent decision:', error)
+        return false
+      }
+      
+      return true
+    } catch (err) {
+      console.error('Exception denying agent decision:', err)
+      return false
+    }
+  }
+
+  // Enhanced Agent operations
+  async getAgents(): Promise<any[]> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('agents')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching agents:', error)
+        return []
+      }
+      
+      return data || []
+    } catch (err) {
+      console.error('Exception fetching agents:', err)
+      return []
+    }
+  }
+
+  async getAgentById(id: string): Promise<any | null> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('agents')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (error) {
+        console.error('Error fetching agent by ID:', error)
+        return null
+      }
+      
+      return data
+    } catch (err) {
+      console.error('Exception fetching agent by ID:', err)
+      return null
+    }
+  }
+
+  async updateAgentStatus(id: string, status: string): Promise<boolean> {
+    try {
+      const { error } = await typedSupabase
+        .from('agents')
+        .update({ 
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+      
+      if (error) {
+        console.error('Error updating agent status:', error)
+        return false
+      }
+      
+      return true
+    } catch (err) {
+      console.error('Exception updating agent status:', err)
+      return false
     }
   }
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from 'react-query';
 import { Activity, Play, Pause, RotateCcw, AlertTriangle, CheckCircle } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const AgentMonitor: React.FC = () => {
   const [agents, setAgents] = useState([]);

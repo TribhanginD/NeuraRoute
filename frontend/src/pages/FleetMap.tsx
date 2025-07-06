@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import { Truck, MapPin, Navigation } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const FleetMap: React.FC = () => {
   const [vehicles, setVehicles] = useState([]);

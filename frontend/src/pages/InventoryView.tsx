@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Package, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const InventoryView: React.FC = () => {
   const [inventory, setInventory] = useState([]);

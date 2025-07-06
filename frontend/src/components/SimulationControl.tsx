@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, Square, RotateCcw, Settings } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const SimulationControl = () => {
   const [simulationStatus, setSimulationStatus] = useState(null);

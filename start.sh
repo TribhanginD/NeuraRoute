@@ -75,42 +75,20 @@ stop_containers() {
 start_services() {
     print_status "Starting NeuraRoute services..."
     
-    # Start database services first
-    print_status "Starting database services..."
-    docker-compose up -d postgres redis
+    # Start Redis first
+    print_status "Starting Redis service..."
+    docker-compose up -d redis
     
-    # Wait for databases to be ready
-    print_status "Waiting for databases to be ready..."
-    sleep 10
+    # Wait for Redis to be ready
+    print_status "Waiting for Redis to be ready..."
+    sleep 5
     
-    # Check database health
-    if docker-compose exec -T postgres pg_isready -U postgres -d neuraroute > /dev/null 2>&1; then
-        print_success "PostgreSQL is ready"
-    else
-        print_error "PostgreSQL failed to start"
-        exit 1
-    fi
-    
+    # Check Redis health
     if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
         print_success "Redis is ready"
     else
         print_error "Redis failed to start"
         exit 1
-    fi
-    
-    # Start backend
-    print_status "Starting backend service..."
-    docker-compose up -d backend
-    
-    # Wait for backend to be ready
-    print_status "Waiting for backend to be ready..."
-    sleep 15
-    
-    # Check backend health
-    if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-        print_success "Backend is ready"
-    else
-        print_warning "Backend health check failed, but continuing..."
     fi
     
     # Start frontend
@@ -137,14 +115,8 @@ health_check() {
         exit 1
     fi
     
-    # Check API endpoints
-    print_status "Checking API endpoints..."
-    
-    if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-        print_success "Backend API is responding"
-    else
-        print_warning "Backend API health check failed"
-    fi
+    # Check frontend endpoint
+    print_status "Checking frontend endpoint..."
     
     if curl -f http://localhost:3000 > /dev/null 2>&1; then
         print_success "Frontend is responding"
@@ -164,12 +136,8 @@ show_status() {
     echo ""
     echo "Access URLs:"
     echo "  Frontend:     http://localhost:3000"
-    echo "  Backend API:  http://localhost:8000"
-    echo "  API Docs:     http://localhost:8000/docs"
-    echo "  Health Check: http://localhost:8000/health"
     echo ""
     echo "Optional Tools (use --tools flag to start):"
-    echo "  pgAdmin:      http://localhost:5050 (admin@neuraroute.com / admin123)"
     echo "  Redis Commander: http://localhost:8081"
     echo ""
     print_success "NeuraRoute is ready!"
@@ -196,7 +164,7 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --help, -h     Show this help message"
-    echo "  --tools        Start optional tools (pgAdmin, Redis Commander)"
+    echo "  --tools        Start optional tools (Redis Commander)"
     echo "  --logs         Show recent logs after startup"
     echo "  --stop         Stop all services"
     echo "  --restart      Restart all services"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cpu, Play, Square, RotateCcw, Eye, Clock } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const AgentMonitor = () => {
   const [agents, setAgents] = useState([]);

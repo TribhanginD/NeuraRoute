@@ -10,7 +10,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const Dashboard: React.FC = () => {
   const [metrics, setMetrics] = useState({

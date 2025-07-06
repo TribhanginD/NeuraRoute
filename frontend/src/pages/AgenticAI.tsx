@@ -9,8 +9,7 @@ import {
 } from '../types/agentic';
 import { formatTimestamp } from '../types/agentic';
 import { agenticWebSocket, WebSocketEventHandler } from '../services/agenticWebSocket';
-
-const API_BASE = '/api/v1/agentic';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const AgenticAI: React.FC = () => {
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
@@ -21,48 +20,15 @@ const AgenticAI: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState('disconnected');
 
-  // Fetch functions
-  const fetchPendingActions = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/pending-actions`);
-      const data: PendingActionsResponse = await res.json();
-      setPendingActions(data.actions);
-    } catch (e) {
-      setError('Failed to fetch pending actions');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
-  const fetchSystemStatus = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/status`);
-      const data: AgenticSystemStatus = await res.json();
-      setSystemStatus(data);
-    } catch (e) {
-      setError('Failed to fetch system status');
-    }
-  };
-
-  const fetchAgentPlan = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/agent-plan`);
-      const data: AgentPlanResponse = await res.json();
-      setAgentPlan(data);
-    } catch (e) {
-      setError('Failed to fetch agent plan');
-    }
-  };
-
-  const fetchActionHistory = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/action-history`);
-      const data: ActionHistoryResponse = await res.json();
-      setActionHistory(data);
-    } catch (e) {
-      setError('Failed to fetch action history');
-    }
+  const fetchAll = async () => {
+    setPendingActions(await supabaseService.getPendingActions());
+    setSystemStatus(await supabaseService.getAgenticStatus());
+    setAgentPlan(await supabaseService.getAgentPlan());
+    setActionHistory(await supabaseService.getActionHistory());
   };
 
   // WebSocket event handler
@@ -72,12 +38,10 @@ const AgenticAI: React.FC = () => {
       case 'action_denied':
       case 'action_created':
       case 'situation_processed':
-        fetchPendingActions();
-        fetchActionHistory();
-        fetchAgentPlan();
+        fetchAll();
         break;
       case 'status_update':
-        fetchSystemStatus();
+        fetchAll();
         break;
       default:
         break;
@@ -104,38 +68,14 @@ const AgenticAI: React.FC = () => {
     };
   }, [handleWebSocketMessage]);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchPendingActions();
-    fetchSystemStatus();
-    fetchAgentPlan();
-    fetchActionHistory();
-  }, []);
-
-  const handleApprove = async (actionId: string) => {
-    setLoading(true);
-    try {
-      await fetch(`${API_BASE}/actions/${actionId}/approve`, { method: 'POST' });
-      fetchPendingActions();
-      fetchActionHistory();
-    } catch (e) {
-      setError('Failed to approve action');
-    } finally {
-      setLoading(false);
-    }
+  const approveAction = async (actionId: string) => {
+    await supabaseService.approveAction(actionId);
+    fetchAll();
   };
 
-  const handleDeny = async (actionId: string) => {
-    setLoading(true);
-    try {
-      await fetch(`${API_BASE}/actions/${actionId}/deny`, { method: 'POST' });
-      fetchPendingActions();
-      fetchActionHistory();
-    } catch (e) {
-      setError('Failed to deny action');
-    } finally {
-      setLoading(false);
-    }
+  const denyAction = async (actionId: string) => {
+    await supabaseService.denyAction(actionId);
+    fetchAll();
   };
 
   return (
@@ -172,14 +112,14 @@ const AgenticAI: React.FC = () => {
             <div className="mt-2 md:mt-0 flex space-x-2">
               <button
                 className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-                onClick={() => handleApprove(action.action_id)}
+                onClick={() => approveAction(action.action_id)}
                 disabled={loading}
               >
                 Approve
               </button>
               <button
                 className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                onClick={() => handleDeny(action.action_id)}
+                onClick={() => denyAction(action.action_id)}
                 disabled={loading}
               >
                 Deny

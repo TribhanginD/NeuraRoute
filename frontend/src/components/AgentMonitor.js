@@ -19,8 +19,7 @@ const AgentMonitor = () => {
 
   useEffect(() => {
     if (selectedAgent) {
-      fetchPendingDecisions(selectedAgent.agent_key);
-      fetchDecisionHistory(selectedAgent.agent_key);
+      fetchAgentDecisions();
     }
   }, [selectedAgent]);
 
@@ -33,34 +32,19 @@ const AgentMonitor = () => {
     }
   };
 
-  const fetchPendingDecisions = async (agentId) => {
-    try {
-      const response = await fetch(`/api/v1/agents/${agentId}/decisions/pending`);
-      const data = await response.json();
-      setPendingDecisions(data.decisions || []);
-    } catch (error) {
-      console.error('Error fetching pending decisions:', error);
-    }
-  };
-
-  const fetchDecisionHistory = async (agentId) => {
-    try {
-      const response = await fetch(`/api/v1/agents/${agentId}/decisions/history`);
-      const data = await response.json();
-      setDecisionHistory(data.decisions || []);
-    } catch (error) {
-      console.error('Error fetching decision history:', error);
-    }
+  const fetchAgentDecisions = async () => {
+    // Fetch pending and historical decisions from Supabase
+    const pending = await supabaseService.getPendingAgentDecisions();
+    const history = await supabaseService.getAgentDecisionHistory();
+    setPendingDecisions(pending || []);
+    setDecisionHistory(history || []);
   };
 
   const approveDecision = async (agentId, decisionId) => {
     try {
-      const response = await fetch(`/api/v1/agents/${agentId}/decisions/${decisionId}/approve`, {
-        method: 'POST'
-      });
-      if (response.ok) {
-        fetchPendingDecisions(agentId);
-        fetchDecisionHistory(agentId);
+      const success = await supabaseService.approveAgentDecision(decisionId);
+      if (success) {
+        fetchAgentDecisions();
       }
     } catch (error) {
       console.error('Error approving decision:', error);
@@ -69,12 +53,9 @@ const AgentMonitor = () => {
 
   const declineDecision = async (agentId, decisionId) => {
     try {
-      const response = await fetch(`/api/v1/agents/${agentId}/decisions/${decisionId}/decline`, {
-        method: 'POST'
-      });
-      if (response.ok) {
-        fetchPendingDecisions(agentId);
-        fetchDecisionHistory(agentId);
+      const success = await supabaseService.denyAgentDecision(decisionId);
+      if (success) {
+        fetchAgentDecisions();
       }
     } catch (error) {
       console.error('Error declining decision:', error);

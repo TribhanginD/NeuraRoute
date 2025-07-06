@@ -17,33 +17,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # Backend API
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: neuraroute-backend
-    env_file:
-      - ./.env
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SIMULATION_TICK_INTERVAL=900
-      - AGENT_CYCLE_INTERVAL=60
-      - LOG_LEVEL=INFO
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
-      - ./logs:/app/logs
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - neuraroute-network
-    restart: unless-stopped
-
   # Frontend React App
   frontend:
     build:
@@ -51,13 +24,11 @@ services:
       dockerfile: Dockerfile
     container_name: neuraroute-frontend
     environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_API_URL=
       - REACT_APP_MAPBOX_TOKEN=${MAPBOX_TOKEN}
-      - REACT_APP_WS_URL=ws://localhost:8000/ws
+      - REACT_APP_WS_URL=
     ports:
       - "3000:3000"
-    depends_on:
-      - backend
     networks:
       - neuraroute-network
     restart: unless-stopped

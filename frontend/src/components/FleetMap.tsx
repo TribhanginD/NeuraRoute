@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, MapPin, Map, Clock } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService';
+import { supabaseService } from '../services/supabaseService.ts';
 
 const FleetMap = () => {
   const [vehicles, setVehicles] = useState([]);
