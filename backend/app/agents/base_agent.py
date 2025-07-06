@@ -42,34 +42,46 @@ class BaseAgent:
     async def initialize(self):
         logger.info(f"Initializing agent", agent_id=self.agent_id)
         try:
-            async for db in get_db():
-                try:
-                    agent_record = await self._get_agent_record(db)
-                    self.name = agent_record.name
-                    self.agent_type = agent_record.agent_type
-                    self.config = agent_record.config or {}
-                    self.status = agent_record.status
-                    self.last_heartbeat = agent_record.last_cycle
-                    await self._load_memory(db, agent_record)
-                except Exception as e:
-                    # Agent doesn't exist in database (common in tests)
-                    # Use default values from constructor
-                    logger.info(f"Agent not found in database, using defaults", agent_id=self.agent_id)
-                    self.name = self.agent_id
-                    self.status = "initialized"
-                
-                await self._initialize_agent()
-                self.status = "ready"
-                
-                # Try to update status if agent exists in database
-                try:
+            # Try to connect to database and get agent record
+            try:
+                async for db in get_db():
+                    try:
+                        agent_record = await self._get_agent_record(db)
+                        self.name = agent_record.name
+                        self.agent_type = agent_record.agent_type
+                        self.config = agent_record.config or {}
+                        self.status = agent_record.status
+                        self.last_heartbeat = agent_record.last_cycle
+                        await self._load_memory(db, agent_record)
+                        break
+                    except Exception as e:
+                        # Agent doesn't exist in database (common in tests)
+                        # Use default values from constructor
+                        logger.info(f"Agent not found in database, using defaults", agent_id=self.agent_id)
+                        self.name = self.agent_id
+                        self.status = "initialized"
+                        break
+            except Exception as e:
+                # Database connection failed, use default values
+                logger.warning(f"Database connection failed, using default values: {str(e)}", agent_id=self.agent_id)
+                self.name = self.agent_id
+                self.status = "initialized"
+            
+            # Initialize agent-specific components
+            await self._initialize_agent()
+            self.status = "ready"
+            
+            # Try to update status if database is available
+            try:
+                async for db in get_db():
                     agent_record = await self._get_agent_record(db)
                     await self._update_status(db, agent_record)
-                except:
-                    pass  # Agent doesn't exist, skip status update
-                
-                logger.info(f"{self.name} initialized successfully", agent_id=self.agent_id)
-                break
+                    break
+            except Exception as e:
+                logger.debug(f"Could not update agent status in database: {str(e)}", agent_id=self.agent_id)
+            
+            logger.info(f"{self.name} initialized successfully", agent_id=self.agent_id)
+            
         except Exception as e:
             logger.error(f"Failed to initialize agent", agent_id=self.agent_id, error=str(e))
             self.status = "error"

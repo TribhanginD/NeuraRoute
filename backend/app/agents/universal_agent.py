@@ -21,9 +21,14 @@ class UniversalAgent(BaseAgent):
 
     async def _initialize_agent(self):
         logger.info("Initializing UniversalAgent components")
-        # Initialize the agentic system
-        self.agentic_system = await get_agentic_system()
-        logger.info("UniversalAgent initialized with agentic system")
+        try:
+            # Initialize the agentic system
+            self.agentic_system = await get_agentic_system()
+            logger.info("UniversalAgent initialized with agentic system")
+        except Exception as e:
+            logger.warning(f"Failed to initialize agentic system (AI services may not be configured): {str(e)}")
+            logger.info("UniversalAgent will continue with mock decision generation")
+            self.agentic_system = None
 
     async def _run_cycle_logic(self):
         """Continuously make autonomous decisions"""

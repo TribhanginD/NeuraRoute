@@ -119,14 +119,16 @@ const Sidebar = ({ open, setOpen }) => {
               
               {/* Service Status */}
               <div className="mt-3 space-y-1">
-                {Object.entries(systemStatus.services).map(([service, status]) => (
-                  <div key={service} className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600 capitalize">{service.replace('_', ' ')}</span>
-                    <div className={`w-2 h-2 rounded-full ${
-                      status === 'healthy' ? 'bg-success-500' : 'bg-error-500'
-                    }`} />
-                  </div>
-                ))}
+                {Object.entries(systemStatus.services)
+                  .filter(([service]) => service !== 'database')
+                  .map(([service, status]) => (
+                    <div key={service} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600 capitalize">{service.replace('_', ' ')}</span>
+                      <div className={`w-2 h-2 rounded-full ${
+                        status === 'healthy' ? 'bg-success-500' : 'bg-error-500'
+                      }`} />
+                    </div>
+                  ))}
               </div>
             </div>
 

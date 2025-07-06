@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.models.simulation import SimulationState, SimulationEvent
 from app.agents.manager import AgentManager
 from app.core.config import settings
+from app.models.orders import Order
 
 logger = structlog.get_logger()
 
@@ -297,7 +298,6 @@ class SimulationEngine:
         async for db in get_db():
             try:
                 # Count active orders
-                from app.models.merchant import Order
                 self.active_orders = db.query(Order).filter(
                     Order.status.in_(["pending", "processing", "shipped"])
                 ).count()

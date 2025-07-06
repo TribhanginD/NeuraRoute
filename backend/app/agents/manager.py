@@ -17,7 +17,7 @@ logger = structlog.get_logger()
 # Global instance
 _agent_manager = None
 
-def get_agent_manager() -> AgentManager:
+def get_agent_manager() -> 'AgentManager':
     """Get the global agent manager instance"""
     global _agent_manager
     if _agent_manager is None:
