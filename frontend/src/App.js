@@ -45,8 +45,8 @@ function App() {
   
   // Update system status from health check
   useEffect(() => {
-    if (healthData?.data) {
-      setSystemStatus(healthData.data);
+    if (healthData) {
+      setSystemStatus(healthData);
     }
   }, [healthData, setSystemStatus]);
   
@@ -97,22 +97,6 @@ function App() {
                 <h1 className="text-xl font-semibold text-gray-900">NeuraRoute</h1>
                 <p className="text-sm text-gray-500">AI-Native Logistics System</p>
               </div>
-            </div>
-            
-            {/* System status indicator */}
-            <div className="flex items-center space-x-4">
-              {healthLoading ? (
-                <div className="loading-spinner" />
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    healthData?.data?.status === 'healthy' ? 'bg-success-500' : 'bg-error-500'
-                  }`} />
-                  <span className="text-sm text-gray-600">
-                    {healthData?.data?.status === 'healthy' ? 'System Online' : 'System Offline'}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         </div>

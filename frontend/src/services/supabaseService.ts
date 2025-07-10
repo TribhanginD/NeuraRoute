@@ -415,10 +415,14 @@ export class SupabaseService {
   async getSystemHealth(): Promise<any> {
     // For now, return mock health data
     return {
-      database: 'healthy',
-      redis: 'healthy',
-      agents: 'healthy',
-      simulation: 'healthy'
+      status: 'healthy',
+      services: {
+        database: 'healthy',
+        redis: 'healthy',
+        agent_manager: 'healthy',
+        simulation_engine: 'healthy'
+      },
+      timestamp: new Date().toISOString()
     }
   }
 
@@ -710,6 +714,42 @@ export class SupabaseService {
       console.error('Exception updating agent status:', err)
       return false
     }
+  }
+
+  // Route operations
+  async getRoutes(): Promise<Database['public']['Tables']['routes']['Row'][]> {
+    try {
+      const { data, error } = await typedSupabase
+        .from('routes')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) {
+        console.error('Error fetching routes:', error)
+        return []
+      }
+      return data || []
+    } catch (err) {
+      console.error('Exception fetching routes:', err)
+      return []
+    }
+  }
+
+  // Fetch agent logs from Supabase
+  async getAgentLogs(agentId = null, limit = 50) {
+    let query = typedSupabase
+      .from('agent_logs')
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .limit(limit);
+    if (agentId) {
+      query = query.eq('agent_id', agentId);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.error('Error fetching agent logs:', error);
+      return [];
+    }
+    return data;
   }
 }
 

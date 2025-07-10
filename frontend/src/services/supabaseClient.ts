@@ -122,6 +122,32 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+      },
+      routes: {
+        Row: {
+          id: string
+          vehicle_id: string
+          route_points: any // JSON array of coordinates or steps
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          vehicle_id: string
+          route_points: any
+          status: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          vehicle_id?: string
+          route_points?: any
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
       }
     }
   }

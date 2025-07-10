@@ -6,3 +6,4 @@
 /backend/app/simulation/__pycache__
 *.pyc
 *.pyc
+.env

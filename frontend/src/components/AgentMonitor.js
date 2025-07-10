@@ -6,7 +6,8 @@ const AgentMonitor = () => {
   const [agents, setAgents] = useState([]);
   const [pendingDecisions, setPendingDecisions] = useState([]);
   const [decisionHistory, setDecisionHistory] = useState([]);
-  const [activeTab, setActiveTab] = useState('decisions'); // 'decisions', 'agents', 'history'
+  const [activeTab, setActiveTab] = useState('decisions'); // 'decisions', 'agents', 'history', 'logs'
+  const [agentLogs, setAgentLogs] = useState([]);
 
   // Always use the first agent as the default
   const selectedAgent = agents.length > 0 ? agents[0] : null;
@@ -23,10 +24,16 @@ const AgentMonitor = () => {
     }
   }, [selectedAgent]);
 
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      fetchLogs();
+    }
+  }, [activeTab, selectedAgent]);
+
   const fetchAgents = async () => {
     try {
       const agents = await supabaseService.getAgents();
-      setAgents(agents.agents || []);
+      setAgents(agents || []);
     } catch (error) {
       console.error('Error fetching agents:', error);
     }
@@ -38,6 +45,11 @@ const AgentMonitor = () => {
     const history = await supabaseService.getAgentDecisionHistory();
     setPendingDecisions(pending || []);
     setDecisionHistory(history || []);
+  };
+
+  const fetchLogs = async () => {
+    const logs = await supabaseService.getAgentLogs(selectedAgent?.agent_key || null);
+    setAgentLogs(logs || []);
   };
 
   const approveDecision = async (agentId, decisionId) => {
@@ -182,6 +194,16 @@ const AgentMonitor = () => {
               }`}
             >
               Agent Status
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'logs'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Logs
             </button>
           </nav>
         </div>
@@ -382,6 +404,30 @@ const AgentMonitor = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {activeTab === 'logs' && (
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Agent Logs</h2>
+              </div>
+              <div className="p-6 max-h-96 overflow-y-auto">
+                {agentLogs.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No logs available</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {agentLogs.map((log) => (
+                      <li key={log.id} className="border-l-2 border-blue-500 pl-3">
+                        <div className="flex justify-between">
+                          <span className="font-medium">[{new Date(log.timestamp).toLocaleString()}] {log.level}</span>
+                        </div>
+                        <div className="text-gray-700 mt-1">{log.message}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           )}
         </>

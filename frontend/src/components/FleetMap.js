@@ -19,7 +19,7 @@ const FleetMap = () => {
       const routesData = await supabaseService.getRoutes();
       
       setVehicles(vehiclesData || []);
-      setRoutes(routesData.routes || []);
+      setRoutes(routesData || []);
     } catch (error) {
       console.error('Error fetching fleet data:', error);
     }

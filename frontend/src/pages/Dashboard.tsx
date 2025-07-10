@@ -27,27 +27,21 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      // Fetch metrics from Supabase
       const orders = await supabaseService.getOrders();
       const agents = await supabaseService.getAgents();
       const vehicles = await supabaseService.getFleet();
       const inventory = await supabaseService.getInventory();
-      // Example: systemHealth and pendingDeliveries can be calculated or fetched as needed
-      setMetrics({
+      console.log('Dashboard fetched:', { orders, agents, vehicles, inventory });
+      const newMetrics = {
         totalOrders: orders.length,
         activeAgents: agents.length,
         vehiclesAvailable: vehicles.length,
         inventoryItems: inventory.length,
-        systemHealth: 100, // Placeholder, replace with real health metric if available
+        systemHealth: 100,
         pendingDeliveries: orders.filter(o => o.status === 'pending').length
-      });
-      // For chart data, you may want to aggregate orders/deliveries by time
-      // Here is a placeholder for real chart data
-      setChartData(orders.slice(0, 6).map((order, idx) => ({
-        time: order.created_at || `T${idx}`,
-        orders: 1,
-        deliveries: order.status === 'delivered' ? 1 : 0
-      })));
+      };
+      console.log('Dashboard metrics:', newMetrics);
+      setMetrics(newMetrics);
       setIsLoading(false);
     };
     fetchData();

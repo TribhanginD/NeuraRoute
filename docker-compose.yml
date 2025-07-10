@@ -48,6 +48,16 @@ services:
     profiles:
       - tools
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
 volumes:
   redis_data:
     driver: local

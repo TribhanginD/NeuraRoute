@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabaseService } from '../services/supabaseService.ts';
+import { useSystemStore } from '../stores/systemStore';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -23,12 +24,14 @@ const Dashboard = () => {
   });
   const [orders, setOrders] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
+  const { systemStatus } = useSystemStore();
 
   useEffect(() => {
     fetchStats();
     supabaseService.getOrders().then(data => {
       setOrders(data || []);
       setRecentOrders((data || []).slice(-5).reverse());
+      console.log('Dashboard orders:', data);
     });
     const interval = setInterval(() => {
       fetchStats();
@@ -37,10 +40,24 @@ const Dashboard = () => {
   }, []);
 
   const fetchStats = async () => {
-    // Example: fetch stats from Supabase tables
-    // You can aggregate stats here as needed
-    // For now, just set systemHealth to 'healthy'
-    setStats((prev) => ({ ...prev, systemHealth: 'healthy' }));
+    // Fetch all data
+    const orders = await supabaseService.getOrders();
+    const agents = await supabaseService.getAgents();
+    const vehicles = await supabaseService.getFleet();
+    const inventory = await supabaseService.getInventory();
+
+    // Calculate stats
+    const newStats = {
+      activeOrders: orders.filter(o => o.status === 'pending').length,
+      activeDeliveries: orders.filter(o => o.status === 'in_transit' || o.status === 'delivering').length,
+      availableVehicles: vehicles.filter(v => v.status === 'available').length,
+      agentsActive: agents.filter(a => a.status === 'running').length,
+      totalInventory: inventory.length,
+      systemHealth: 'healthy'
+    };
+
+    setStats(newStats);
+    console.log('Dashboard stats:', newStats);
   };
 
   const chartData = useMemo(() => {
@@ -140,22 +157,14 @@ const Dashboard = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">System Health</h3>
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Database</span>
-              <span className="text-sm text-green-600">Healthy</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Redis Cache</span>
-              <span className="text-sm text-green-600">Healthy</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">AI Agents</span>
-              <span className="text-sm text-green-600">Running</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Forecasting Engine</span>
-              <span className="text-sm text-green-600">Running</span>
-            </div>
+            {Object.entries(systemStatus.services).map(([service, status]) => (
+              <div key={service} className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">{service.replace('_', ' ')}</span>
+                <span className={`text-sm font-medium ${status === 'healthy' || status === 'running' ? 'text-green-600' : 'text-red-600'}`}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -1,162 +1,285 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  PendingAction,
-  AgenticSystemStatus,
-  PendingActionsResponse,
-  AgentPlanResponse,
-  ActionHistoryResponse,
-  AgenticWebSocketMessage,
-} from '../types/agentic';
-import { formatTimestamp } from '../types/agentic';
-import { agenticWebSocket, WebSocketEventHandler } from '../services/agenticWebSocket';
-import { supabaseService } from '../services/supabaseService.ts';
+import { agenticApi, AgentStatus, SystemStats } from '../services/agenticApi';
 
 const AgenticAI: React.FC = () => {
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
-  const [systemStatus, setSystemStatus] = useState<AgenticSystemStatus | null>(null);
-  const [agentPlan, setAgentPlan] = useState<AgentPlanResponse | null>(null);
-  const [actionHistory, setActionHistory] = useState<ActionHistoryResponse | null>(null);
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
+  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wsStatus, setWsStatus] = useState('disconnected');
+  const [lastAction, setLastAction] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAll();
+    fetchData();
+    // Poll for updates every 10 seconds
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchAll = async () => {
-    setPendingActions(await supabaseService.getPendingActions());
-    setSystemStatus(await supabaseService.getAgenticStatus());
-    setAgentPlan(await supabaseService.getAgentPlan());
-    setActionHistory(await supabaseService.getActionHistory());
-  };
-
-  // WebSocket event handler
-  const handleWebSocketMessage: WebSocketEventHandler = useCallback((message: AgenticWebSocketMessage) => {
-    switch (message.type) {
-      case 'action_approved':
-      case 'action_denied':
-      case 'action_created':
-      case 'situation_processed':
-        fetchAll();
-        break;
-      case 'status_update':
-        fetchAll();
-        break;
-      default:
-        break;
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [status, stats] = await Promise.all([
+        agenticApi.getAgentStatus(),
+        agenticApi.getSystemStats()
+      ]);
+      setAgentStatus(status);
+      setSystemStats(stats);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch data');
+    } finally {
+      setLoading(false);
     }
-  }, []);
-
-  // WebSocket connection
-  useEffect(() => {
-    agenticWebSocket.connect().then(() => {
-      setWsStatus(agenticWebSocket.getConnectionState());
-    });
-    agenticWebSocket.on('action_approved', handleWebSocketMessage);
-    agenticWebSocket.on('action_denied', handleWebSocketMessage);
-    agenticWebSocket.on('action_created', handleWebSocketMessage);
-    agenticWebSocket.on('situation_processed', handleWebSocketMessage);
-    agenticWebSocket.on('status_update', handleWebSocketMessage);
-    // Connection status polling
-    const interval = setInterval(() => {
-      setWsStatus(agenticWebSocket.getConnectionState());
-    }, 1000);
-    return () => {
-      agenticWebSocket.disconnect();
-      clearInterval(interval);
-    };
-  }, [handleWebSocketMessage]);
-
-  const approveAction = async (actionId: string) => {
-    await supabaseService.approveAction(actionId);
-    fetchAll();
   };
 
-  const denyAction = async (actionId: string) => {
-    await supabaseService.denyAction(actionId);
-    fetchAll();
+  const startAgents = async () => {
+    try {
+      setLoading(true);
+      await agenticApi.startAgents();
+      setLastAction('Agents started successfully');
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start agents');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stopAgents = async () => {
+    try {
+      setLoading(true);
+      await agenticApi.stopAgents();
+      setLastAction('Agents stopped successfully');
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to stop agents');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerAgentAction = async (agentType: string, action: string) => {
+    try {
+      setLoading(true);
+      await agenticApi.triggerAgentAction(agentType, action);
+      setLastAction(`Triggered ${action} for ${agentType} agent`);
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to trigger action');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex items-center mb-4">
-        <h1 className="text-3xl font-bold flex-1">Agentic AI Dashboard</h1>
-        <span className={`ml-4 px-3 py-1 rounded text-xs font-semibold ${wsStatus === 'connected' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>WebSocket: {wsStatus}</span>
+    <div className="p-8 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Agentic AI Dashboard</h1>
+        <div className="flex space-x-2">
+          <button
+            onClick={startAgents}
+            disabled={loading || agentStatus?.agents_running}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+          >
+            Start Agents
+          </button>
+          <button
+            onClick={stopAgents}
+            disabled={loading || !agentStatus?.agents_running}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
+          >
+            Stop Agents
+          </button>
+        </div>
       </div>
-      {agentPlan && (
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-          <div className="font-semibold mb-1">Agent Plan & Reasoning</div>
-          <div className="text-gray-800 mb-2">{agentPlan.current_reasoning}</div>
-          <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-            <span>Memory size: {agentPlan.memory_size}</span>
-            <span>Tools available: {agentPlan.tools_available}</span>
-            <span>Simulation mode: {agentPlan.simulation_mode ? 'On' : 'Off'}</span>
-            <span>Recent actions: {agentPlan.recent_actions.pending} pending, {agentPlan.recent_actions.approved} approved, {agentPlan.recent_actions.denied} denied</span>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
+
+      {lastAction && (
+        <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+          {lastAction}
+        </div>
+      )}
+
+      {/* System Status */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">System Status</h2>
+          {loading ? (
+            <div>Loading...</div>
+          ) : agentStatus ? (
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span>Manager Running:</span>
+                <span className={agentStatus.manager_running ? 'text-green-600' : 'text-red-600'}>
+                  {agentStatus.manager_running ? 'Yes' : 'No'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Agents Running:</span>
+                <span className={agentStatus.agents_running ? 'text-green-600' : 'text-red-600'}>
+                  {agentStatus.agents_running ? 'Yes' : 'No'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Agents:</span>
+                <span>{agentStatus.total_agents}</span>
+              </div>
+            </div>
+          ) : (
+            <div>No status available</div>
+          )}
+        </div>
+
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">System Statistics</h2>
+          {loading ? (
+            <div>Loading...</div>
+          ) : systemStats ? (
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span>Inventory Items:</span>
+                <span>{systemStats.inventory_items}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Orders:</span>
+                <span>{systemStats.orders}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Fleet Vehicles:</span>
+                <span>{systemStats.fleet_vehicles}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Agent Logs:</span>
+                <span>{systemStats.agent_logs}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Agent Actions:</span>
+                <span>{systemStats.agent_actions}</span>
+              </div>
+            </div>
+          ) : (
+            <div>No stats available</div>
+          )}
+        </div>
+      </div>
+
+      {/* Agent Status */}
+      {agentStatus && (
+        <div className="bg-white shadow rounded-lg p-6 mb-8">
+          <h2 className="text-xl font-semibold mb-4">Agent Status</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(agentStatus.agents).map(([agentId, agent]) => (
+              <div key={agentId} className="border rounded p-4">
+                <div className="font-semibold capitalize">{agentId} Agent</div>
+                <div className="text-sm text-gray-600 mb-2">{agent.agent_type}</div>
+                <div className="flex items-center space-x-2">
+                  <span className={`w-2 h-2 rounded-full ${agent.is_active ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                  <span className="text-sm">{agent.is_active ? 'Active' : 'Inactive'}</span>
+                </div>
+                {agent.last_action_time && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Last action: {new Date(agent.last_action_time).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
-      <h2 className="text-xl font-semibold mb-2">Pending Actions</h2>
-      {loading && <div>Loading...</div>}
-      {error && <div className="text-red-600">{error}</div>}
-      <div className="space-y-4 mb-8">
-        {pendingActions.length === 0 && <div>No pending actions.</div>}
-        {pendingActions.map(action => (
-          <div key={action.action_id} className="bg-white shadow rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="font-semibold">{action.action_type}</div>
-              <div className="text-gray-600 text-sm">Reason: {action.reasoning || 'N/A'}</div>
-              <div className="text-gray-500 text-xs">Confidence: {action.confidence.toFixed(2)}</div>
-              <div className="text-gray-400 text-xs">{formatTimestamp(action.timestamp)}</div>
-            </div>
-            <div className="mt-2 md:mt-0 flex space-x-2">
+
+      {/* Agent Actions */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-xl font-semibold mb-4">Trigger Agent Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Inventory Agent */}
+          <div className="border rounded p-4">
+            <h3 className="font-semibold mb-3">Inventory Agent</h3>
+            <div className="space-y-2">
               <button
-                className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-                onClick={() => approveAction(action.action_id)}
+                onClick={() => triggerAgentAction('inventory', 'check_low_stock')}
                 disabled={loading}
+                className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
               >
-                Approve
+                Check Low Stock
               </button>
               <button
-                className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                onClick={() => denyAction(action.action_id)}
+                onClick={() => triggerAgentAction('inventory', 'optimize_inventory')}
                 disabled={loading}
+                className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
               >
-                Deny
+                Optimize Inventory
+              </button>
+              <button
+                onClick={() => triggerAgentAction('inventory', 'handle_expired_items')}
+                disabled={loading}
+                className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+              >
+                Handle Expired Items
               </button>
             </div>
           </div>
-        ))}
-      </div>
-      <h2 className="text-xl font-semibold mb-2">Action History</h2>
-      <div className="bg-white shadow rounded-lg p-4">
-        {!actionHistory ? (
-          <div>Loading...</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <div className="font-semibold mb-1">Pending</div>
-              {actionHistory.history.pending.length === 0 ? <div className="text-xs text-gray-400">None</div> :
-                actionHistory.history.pending.map(a => (
-                  <div key={a.action_id} className="text-xs text-gray-700 mb-1">{a.action_type} ({formatTimestamp(a.timestamp)})</div>
-                ))}
-            </div>
-            <div>
-              <div className="font-semibold mb-1">Approved</div>
-              {actionHistory.history.approved.length === 0 ? <div className="text-xs text-gray-400">None</div> :
-                actionHistory.history.approved.map(a => (
-                  <div key={a.action_id} className="text-xs text-green-700 mb-1">{a.action_type} ({formatTimestamp(a.timestamp)})</div>
-                ))}
-            </div>
-            <div>
-              <div className="font-semibold mb-1">Denied</div>
-              {actionHistory.history.denied.length === 0 ? <div className="text-xs text-gray-400">None</div> :
-                actionHistory.history.denied.map(a => (
-                  <div key={a.action_id} className="text-xs text-red-700 mb-1">{a.action_type} ({formatTimestamp(a.timestamp)})</div>
-                ))}
+
+          {/* Routing Agent */}
+          <div className="border rounded p-4">
+            <h3 className="font-semibold mb-3">Routing Agent</h3>
+            <div className="space-y-2">
+              <button
+                onClick={() => triggerAgentAction('routing', 'optimize_routes')}
+                disabled={loading}
+                className="w-full bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+              >
+                Optimize Routes
+              </button>
+              <button
+                onClick={() => triggerAgentAction('routing', 'assign_vehicles')}
+                disabled={loading}
+                className="w-full bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+              >
+                Assign Vehicles
+              </button>
+              <button
+                onClick={() => triggerAgentAction('routing', 'handle_dynamic_routing')}
+                disabled={loading}
+                className="w-full bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+              >
+                Dynamic Routing
+              </button>
             </div>
           </div>
-        )}
+
+          {/* Pricing Agent */}
+          <div className="border rounded p-4">
+            <h3 className="font-semibold mb-3">Pricing Agent</h3>
+            <div className="space-y-2">
+              <button
+                onClick={() => triggerAgentAction('pricing', 'analyze_market_conditions')}
+                disabled={loading}
+                className="w-full bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+              >
+                Analyze Market
+              </button>
+              <button
+                onClick={() => triggerAgentAction('pricing', 'optimize_inventory_pricing')}
+                disabled={loading}
+                className="w-full bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+              >
+                Optimize Pricing
+              </button>
+              <button
+                onClick={() => triggerAgentAction('pricing', 'handle_dynamic_pricing')}
+                disabled={loading}
+                className="w-full bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+              >
+                Dynamic Pricing
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
