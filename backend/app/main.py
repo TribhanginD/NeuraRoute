@@ -1,16 +1,59 @@
 import asyncio
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Set
 import uvicorn
+import json
 
 from .core.config import settings
 from .agents.manager import agent_manager
 
 # Global variable to track if agents are running
 agents_running = False
+
+# --- WebSocket for real-time agent actions ---
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.discard(websocket)
+
+    async def broadcast(self, message: dict):
+        data = json.dumps(message)
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_text(data)
+            except Exception:
+                self.disconnect(connection)
+
+# Global connection manager instance
+agent_action_manager = ConnectionManager()
+
+def broadcast_agent_action(action: dict):
+    """Schedule a broadcast of a new agent action to all WebSocket clients."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        asyncio.create_task(agent_action_manager.broadcast({"type": "agent_action", "action": action}))
+    else:
+        loop.run_until_complete(agent_action_manager.broadcast({"type": "agent_action", "action": action}))
+
+@app.websocket("/ws/agent-actions")
+async def websocket_agent_actions(websocket: WebSocket):
+    await agent_action_manager.connect(websocket)
+    try:
+        while True:
+            # Keep the connection alive; ignore incoming messages
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        agent_action_manager.disconnect(websocket)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

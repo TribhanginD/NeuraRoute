@@ -72,12 +72,12 @@ function App() {
   };
   
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-50">
+    <div className="h-screen flex bg-gray-50">
       {/* Sidebar */}
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
       
       {/* Main content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Top navigation */}
         <div className="bg-white shadow-sm border-b border-gray-200">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16">
@@ -102,7 +102,7 @@ function App() {
         </div>
         
         {/* Page content */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto min-h-0">
           <AnimatePresence mode="wait">
             <Routes>
               <Route

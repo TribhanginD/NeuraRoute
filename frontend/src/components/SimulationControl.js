@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, Square, RotateCcw, Settings } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService.ts';
+import { agenticWebSocket } from '../services/agenticWebSocket.ts';
 
 const SimulationControl = () => {
   const [simulationStatus, setSimulationStatus] = useState(null);
@@ -14,7 +14,7 @@ const SimulationControl = () => {
 
   const fetchSimulationStatus = async () => {
     try {
-      const status = await supabaseService.getSimulationStatus();
+      const status = await agenticWebSocket.getSimulationStatus();
       setSimulationStatus(status);
     } catch (error) {
       console.error('Error fetching simulation status:', error);
@@ -23,10 +23,12 @@ const SimulationControl = () => {
 
   const controlSimulation = async (action) => {
     try {
-      const result = await supabaseService.simulationAction(action);
-      if (result.ok) {
-        fetchSimulationStatus();
+      if (action === 'start') {
+        await agenticWebSocket.startAgents();
+      } else if (action === 'stop') {
+        await agenticWebSocket.stopAgents();
       }
+      fetchSimulationStatus();
     } catch (error) {
       console.error(`Error ${action} simulation:`, error);
     }
@@ -34,12 +36,8 @@ const SimulationControl = () => {
 
   const setSimulationSpeed = async (newSpeed) => {
     try {
-      const speed = await supabaseService.getSimulationSpeed();
-      const response = await supabaseService.setSimulationSpeed(newSpeed);
-      if (response.ok) {
-        setSpeed(newSpeed);
-        fetchSimulationStatus();
-      }
+      setSpeed(newSpeed);
+      fetchSimulationStatus();
     } catch (error) {
       console.error('Error setting simulation speed:', error);
     }
@@ -49,122 +47,70 @@ const SimulationControl = () => {
     <div className="p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Simulation Control</h1>
-        <p className="text-gray-600 mt-2">Manage the AI-Native Logistics Simulation</p>
-      </div>
-
-      {/* Simulation Status */}
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Simulation Status</h2>
-        {simulationStatus && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Status</p>
-              <p className={`text-lg font-semibold ${
-                simulationStatus.is_running ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {simulationStatus.is_running ? 'Running' : 'Stopped'}
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Tick Count</p>
-              <p className="text-lg font-semibold text-gray-900">{simulationStatus.tick_count}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Current Time</p>
-              <p className="text-lg font-semibold text-gray-900">
-                {new Date(simulationStatus.current_time).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        )}
+        <p className="text-gray-600 mt-2">Control and monitor the AI agent simulation</p>
       </div>
 
       {/* Control Panel */}
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Control Panel</h2>
-        <div className="flex flex-wrap gap-4 items-center">
+      <div className="bg-white rounded-lg shadow p-6 mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">Agent Control</h2>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700">Speed:</label>
+              <select
+                value={speed}
+                onChange={(e) => setSimulationSpeed(parseFloat(e.target.value))}
+                className="border border-gray-300 rounded-md px-3 py-1 text-sm"
+              >
+                <option value={0.5}>0.5x</option>
+                <option value={1.0}>1.0x</option>
+                <option value={2.0}>2.0x</option>
+                <option value={5.0}>5.0x</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-4">
           <button
             onClick={() => controlSimulation('start')}
-            disabled={simulationStatus?.is_running}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
           >
-            <Play className="h-4 w-4 mr-2" />
-            Start
+            <Play className="h-5 w-5" />
+            <span>Start Agents</span>
           </button>
-          
-          <button
-            onClick={() => controlSimulation('pause')}
-            disabled={!simulationStatus?.is_running}
-            className="flex items-center px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Pause className="h-4 w-4 mr-2" />
-            Pause
-          </button>
-          
           <button
             onClick={() => controlSimulation('stop')}
-            disabled={!simulationStatus?.is_running}
-            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
           >
-            <Square className="h-4 w-4 mr-2" />
-            Stop
+            <Square className="h-5 w-5" />
+            <span>Stop Agents</span>
           </button>
-          
           <button
-            onClick={() => controlSimulation('reset')}
-            className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            onClick={() => controlSimulation('restart')}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
           >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset
+            <RotateCcw className="h-5 w-5" />
+            <span>Restart</span>
           </button>
         </div>
       </div>
 
-      {/* Speed Control */}
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Speed Control</h2>
-        <div className="flex items-center space-x-4">
-          <label className="text-sm text-gray-600">Speed Multiplier:</label>
-          <input
-            type="range"
-            min="0.1"
-            max="10"
-            step="0.1"
-            value={speed}
-            onChange={(e) => setSpeed(parseFloat(e.target.value))}
-            onMouseUp={() => setSimulationSpeed(speed)}
-            onKeyUp={() => setSimulationSpeed(speed)}
-            className="w-32"
-          />
-          <span className="text-sm font-medium text-gray-900">{speed}x</span>
-          <button
-            onClick={() => setSimulationSpeed(speed)}
-            className="flex items-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-          >
-            <Settings className="h-3 w-3 mr-1" />
-            Apply
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Adjust simulation speed from 0.1x (slow) to 10x (fast)
-        </p>
-      </div>
-
-      {/* Simulation Metrics */}
+      {/* Status Display */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">System Status</h3>
           <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Active Agents</span>
+              <span className="text-sm text-gray-600">Agents Running</span>
               <span className="text-sm font-medium text-gray-900">
-                {simulationStatus?.agents_active || 0}
+                {simulationStatus?.agents_running ? 'Yes' : 'No'}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Events Processed</span>
+              <span className="text-sm text-gray-600">Total Agents</span>
               <span className="text-sm font-medium text-gray-900">
-                {simulationStatus?.events_processed || 0}
+                {simulationStatus?.total_agents || 0}
               </span>
             </div>
             <div className="flex justify-between">

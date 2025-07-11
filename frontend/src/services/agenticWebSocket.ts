@@ -9,171 +9,139 @@ import {
   SimulationModeChangedMessage
 } from '../types/agentic';
 
-export type WebSocketEventHandler = (message: AgenticWebSocketMessage) => void;
-
 class AgenticWebSocketService {
-  private ws: WebSocket | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
-  private eventHandlers: Map<string, WebSocketEventHandler[]> = new Map();
-  private isConnecting = false;
   private url: string;
+  private baseUrl: string;
 
-  constructor(baseUrl: string = '') {
-    this.url = `${baseUrl}/api/v1/agentic/ws`;
+  constructor(baseUrl: string = 'http://localhost:8000') {
+    this.baseUrl = baseUrl;
+    // Remove WebSocket URL and connection logic
+    // Only keep HTTP API methods
   }
 
-  connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        resolve();
-        return;
-      }
-
-      if (this.isConnecting) {
-        reject(new Error('Connection already in progress'));
-        return;
-      }
-
-      this.isConnecting = true;
-
-      try {
-        this.ws = new WebSocket(this.url);
-
-        this.ws.onopen = () => {
-          console.log('Agentic WebSocket connected');
-          this.isConnecting = false;
-          this.reconnectAttempts = 0;
-          
-          // Subscribe to all events by default
-          this.subscribe(['all']);
-          resolve();
-        };
-
-        this.ws.onmessage = (event) => {
-          try {
-            const message: AgenticWebSocketMessage = JSON.parse(event.data);
-            this.handleMessage(message);
-          } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
-          }
-        };
-
-        this.ws.onclose = (event) => {
-          console.log('Agentic WebSocket disconnected:', event.code, event.reason);
-          this.isConnecting = false;
-          
-          if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.scheduleReconnect();
-          }
-        };
-
-        this.ws.onerror = (error) => {
-          console.error('Agentic WebSocket error:', error);
-          this.isConnecting = false;
-          reject(error);
-        };
-
-      } catch (error) {
-        this.isConnecting = false;
-        reject(error);
-      }
-    });
+  // API Methods for HTTP requests
+  async getAgentStatus() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/status`);
+      if (!response.ok) throw new Error('Failed to fetch agent status');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching agent status:', error);
+      return { agents: {} };
+    }
   }
 
-  private scheduleReconnect(): void {
-    this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    
-    console.log(`Scheduling WebSocket reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
-    
-    setTimeout(() => {
-      this.connect().catch(error => {
-        console.error('WebSocket reconnect failed:', error);
+  async getAgentActions() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/actions`);
+      if (!response.ok) throw new Error('Failed to fetch agent actions');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching agent actions:', error);
+      return { actions: [] };
+    }
+  }
+
+  async getAgentLogs() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/logs`);
+      if (!response.ok) throw new Error('Failed to fetch agent logs');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching agent logs:', error);
+      return { logs: [] };
+    }
+  }
+
+  async approveAction(actionId: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/actions/${actionId}/approve`, {
+        method: 'POST',
       });
-    }, delay);
-  }
-
-  disconnect(): void {
-    if (this.ws) {
-      this.ws.close(1000, 'Client disconnect');
-      this.ws = null;
-    }
-    this.eventHandlers.clear();
-  }
-
-  subscribe(eventTypes: string[]): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const subscription: WebSocketSubscription = {
-        type: 'subscribe',
-        events: eventTypes
-      };
-      this.ws.send(JSON.stringify(subscription));
+      if (!response.ok) throw new Error('Failed to approve action');
+      return await response.json();
+    } catch (error) {
+      console.error('Error approving action:', error);
+      throw error;
     }
   }
 
-  on(eventType: string, handler: WebSocketEventHandler): void {
-    if (!this.eventHandlers.has(eventType)) {
-      this.eventHandlers.set(eventType, []);
-    }
-    this.eventHandlers.get(eventType)!.push(handler);
-  }
-
-  off(eventType: string, handler: WebSocketEventHandler): void {
-    const handlers = this.eventHandlers.get(eventType);
-    if (handlers) {
-      const index = handlers.indexOf(handler);
-      if (index > -1) {
-        handlers.splice(index, 1);
-      }
-    }
-  }
-
-  private handleMessage(message: AgenticWebSocketMessage): void {
-    // Call handlers for specific event type
-    const handlers = this.eventHandlers.get(message.type);
-    if (handlers) {
-      handlers.forEach(handler => {
-        try {
-          handler(message);
-        } catch (error) {
-          console.error('Error in WebSocket event handler:', error);
-        }
+  async declineAction(actionId: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/actions/${actionId}/decline`, {
+        method: 'POST',
       });
+      if (!response.ok) throw new Error('Failed to decline action');
+      return await response.json();
+    } catch (error) {
+      console.error('Error declining action:', error);
+      throw error;
     }
+  }
 
-    // Call handlers for 'all' events
-    const allHandlers = this.eventHandlers.get('all');
-    if (allHandlers) {
-      allHandlers.forEach(handler => {
-        try {
-          handler(message);
-        } catch (error) {
-          console.error('Error in WebSocket all event handler:', error);
-        }
+  async triggerAgent(agentType: string, action: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/trigger?agent_type=${agentType}&action=${action}`, {
+        method: 'POST',
       });
+      if (!response.ok) throw new Error('Failed to trigger agent');
+      return await response.json();
+    } catch (error) {
+      console.error('Error triggering agent:', error);
+      throw error;
     }
   }
 
-  isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
-  }
-
-  getConnectionState(): string {
-    if (!this.ws) return 'disconnected';
-    switch (this.ws.readyState) {
-      case WebSocket.CONNECTING: return 'connecting';
-      case WebSocket.OPEN: return 'connected';
-      case WebSocket.CLOSING: return 'closing';
-      case WebSocket.CLOSED: return 'closed';
-      default: return 'unknown';
+  async getSimulationStatus() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/system/stats`);
+      if (!response.ok) throw new Error('Failed to fetch simulation status');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching simulation status:', error);
+      return { status: 'unknown' };
     }
   }
+
+  async startAgents() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/start`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to start agents');
+      return await response.json();
+    } catch (error) {
+      console.error('Error starting agents:', error);
+      throw error;
+    }
+  }
+
+  async stopAgents() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/agents/stop`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to stop agents');
+      return await response.json();
+    } catch (error) {
+      console.error('Error stopping agents:', error);
+      throw error;
+    }
+  }
+
+  // Remove all WebSocket specific methods
+  // connect(): Promise<void> { ... }
+  // private scheduleReconnect(): void { ... }
+  // disconnect(): void { ... }
+  // subscribe(eventTypes: string[]): void { ... }
+  // on(eventType: string, handler: WebSocketEventHandler): void { ... }
+  // off(eventType: string, handler: WebSocketEventHandler): void { ... }
+  // private handleMessage(message: AgenticWebSocketMessage): void { ... }
+  // isConnected(): boolean { ... }
+  // getConnectionState(): string { ... }
+
+  // Only keep HTTP API methods and the class export
 }
 
 // Export singleton instance
-export const agenticWebSocket = new AgenticWebSocketService();
-
-// Export types for convenience
-export type { WebSocketEventHandler }; 
+export const agenticWebSocket = new AgenticWebSocketService(); 

@@ -1,6 +1,7 @@
 import asyncio
 from typing import Dict, Any, Optional, List
 from .base_agent import BaseAgent
+from app.main import broadcast_agent_action
 
 class RoutingAgent(BaseAgent):
     def __init__(self, agent_id: str = "routing_agent_001"):
@@ -215,6 +216,7 @@ class RoutingAgent(BaseAgent):
                 }
                 
                 result = self.supabase.table("agent_actions").insert(assignment_data).execute()
+                broadcast_agent_action(assignment_data)
                 
                 # Update vehicle status
                 self.supabase.table("fleet").update({"status": "assigned"}).eq("id", assignment.get("vehicle_id")).execute()

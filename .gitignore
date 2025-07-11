@@ -11,3 +11,4 @@ frontend/.env
 /scripts
 /database
 frontend/.env
+/frontend/build

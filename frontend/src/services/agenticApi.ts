@@ -167,3 +167,6 @@ class AgenticApiService {
 }
 
 export const agenticApi = new AgenticApiService(); 
+
+// Re-export the agenticWebSocket service as agenticApi for cleaner imports
+export { agenticWebSocket as agenticApi } from './agenticWebSocket'; 

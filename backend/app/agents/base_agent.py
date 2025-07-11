@@ -32,24 +32,21 @@ class BaseAgent(ABC):
             print(f"Error logging action: {e}")
     
     async def get_context(self) -> Dict[str, Any]:
-        """Get current system context for decision making"""
+        """Get current system context for decision making, with limited context size."""
         try:
-            # Get current inventory
-            inventory_response = self.supabase.table("inventory").select("*").execute()
+            # Limit inventory and fleet to 20 items, orders and decisions to 10
+            inventory_response = self.supabase.table("inventory").select("*").limit(20).execute()
             inventory = inventory_response.data if inventory_response.data else []
-            
-            # Get current fleet status
-            fleet_response = self.supabase.table("fleet").select("*").execute()
+
+            fleet_response = self.supabase.table("fleet").select("*").limit(20).execute()
             fleet = fleet_response.data if fleet_response.data else []
-            
-            # Get pending decisions
-            decisions_response = self.supabase.table("agent_decisions").select("*").eq("status", "pending").execute()
+
+            decisions_response = self.supabase.table("agent_decisions").select("*").eq("status", "pending").limit(10).execute()
             pending_decisions = decisions_response.data if decisions_response.data else []
-            
-            # Get recent orders
+
             orders_response = self.supabase.table("orders").select("*").order("created_at", desc=True).limit(10).execute()
             recent_orders = orders_response.data if orders_response.data else []
-            
+
             return {
                 "inventory": inventory,
                 "fleet": fleet,
@@ -62,34 +59,40 @@ class BaseAgent(ABC):
             return {}
     
     async def make_decision(self, prompt: str, response_format: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Make a decision using Groq LLM"""
+        """Make a decision using Groq LLM and log to agent_actions."""
         try:
             context = await self.get_context()
-            
             # Add context to prompt
             enhanced_prompt = f"""
             Current System Context:
             {json.dumps(context, indent=2)}
-            
             Decision Request:
             {prompt}
-            
             Please analyze the context and provide a decision in the specified format.
             """
-            
             decision = await groq_client.get_structured_response(
                 enhanced_prompt, 
                 response_format,
                 temperature=0.3
             )
-            
             if decision:
                 await self.log_action("decision_made", {
                     "prompt": prompt,
                     "decision": decision,
                     "response_format": response_format
                 })
-            
+                # Insert a generic agent action for every decision (unless subclass does more specific insert)
+                action_data = {
+                    "agent_id": self.agent_id,
+                    "action_type": "decision",
+                    "payload": decision,  # Use the actual decision dict for jsonb
+                    "status": "pending",
+                    "created_at": datetime.utcnow().isoformat()
+                }
+                try:
+                    self.supabase.table("agent_actions").insert(action_data).execute()
+                except Exception as e:
+                    print(f"Error inserting generic agent action: {e}")
             return decision
         except Exception as e:
             print(f"Error making decision: {e}")

@@ -1,6 +1,7 @@
 import asyncio
 from typing import Dict, Any, Optional
 from .base_agent import BaseAgent
+from app.main import broadcast_agent_action
 
 class InventoryAgent(BaseAgent):
     def __init__(self, agent_id: str = "inventory_agent_001"):
@@ -192,6 +193,7 @@ class InventoryAgent(BaseAgent):
             }
             
             result = self.supabase.table("agent_actions").insert(action_data).execute()
+            broadcast_agent_action(action_data)
             return result
         
         except Exception as e:
