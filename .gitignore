@@ -7,3 +7,7 @@
 *.pyc
 *.pyc
 .env
+frontend/.env
+/scripts
+/database
+frontend/.env
