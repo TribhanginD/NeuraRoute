@@ -24,6 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: neuraroute-frontend
     environment:
+      # REACT_APP_API_URL can be set to override backend URL; leave blank for auto-detect
       - REACT_APP_API_URL=
       - REACT_APP_MAPBOX_TOKEN=${MAPBOX_TOKEN}
       - REACT_APP_WS_URL=

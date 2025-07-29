@@ -20,7 +20,6 @@ const navigation = [
   { name: 'Fleet Map', href: '/fleet', icon: Map },
   { name: 'Inventory', href: '/inventory', icon: Package },
   { name: 'Merchant Chat', href: '/chat', icon: MessageSquare },
-  { name: 'Simulation', href: '/simulation', icon: Settings },
 ];
 
 const Sidebar: React.FC = () => {

@@ -13,8 +13,19 @@ class AgenticWebSocketService {
   private url: string;
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:8000') {
-    this.baseUrl = baseUrl;
+  constructor() {
+    // Prefer env variable if provided, otherwise determine sensible default
+    const envUrl = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL)
+      ? process.env.REACT_APP_API_URL
+      : '';
+
+    if (envUrl) {
+      this.baseUrl = envUrl.replace(/\/+$/, ''); // remove trailing slash
+    } else {
+      // Default: use the current hostname and port 8000
+      const host = window.location.hostname || 'localhost';
+      this.baseUrl = `http://${host}:8000`;
+    }
     // Remove WebSocket URL and connection logic
     // Only keep HTTP API methods
   }
@@ -36,7 +47,7 @@ class AgenticWebSocketService {
       const response = await fetch(`${this.baseUrl}/api/v1/agents/actions`);
       if (!response.ok) throw new Error('Failed to fetch agent actions');
       return await response.json();
-    } catch (error) {
+          } catch (error) {
       console.error('Error fetching agent actions:', error);
       return { actions: [] };
     }
@@ -47,7 +58,7 @@ class AgenticWebSocketService {
       const response = await fetch(`${this.baseUrl}/api/v1/agents/logs`);
       if (!response.ok) throw new Error('Failed to fetch agent logs');
       return await response.json();
-    } catch (error) {
+      } catch (error) {
       console.error('Error fetching agent logs:', error);
       return { logs: [] };
     }
@@ -144,4 +155,4 @@ class AgenticWebSocketService {
 }
 
 // Export singleton instance
-export const agenticWebSocket = new AgenticWebSocketService(); 
+export const agenticWebSocket = new AgenticWebSocketService();

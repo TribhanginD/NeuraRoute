@@ -32,32 +32,6 @@ const AgenticAI: React.FC = () => {
     }
   };
 
-  const startAgents = async () => {
-    try {
-      setLoading(true);
-      await agenticApi.startAgents();
-      setLastAction('Agents started successfully');
-      await fetchData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start agents');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const stopAgents = async () => {
-    try {
-      setLoading(true);
-      await agenticApi.stopAgents();
-      setLastAction('Agents stopped successfully');
-      await fetchData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to stop agents');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const triggerAgentAction = async (agentType: string, action: string) => {
     try {
       setLoading(true);
@@ -75,22 +49,7 @@ const AgenticAI: React.FC = () => {
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Agentic AI Dashboard</h1>
-        <div className="flex space-x-2">
-          <button
-            onClick={startAgents}
-            disabled={loading || agentStatus?.agents_running}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
-          >
-            Start Agents
-          </button>
-          <button
-            onClick={stopAgents}
-            disabled={loading || !agentStatus?.agents_running}
-            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
-          >
-            Stop Agents
-          </button>
-        </div>
+        {/* Remove Start/Stop Agents buttons */}
       </div>
 
       {error && (
@@ -250,7 +209,7 @@ const AgenticAI: React.FC = () => {
                 Dynamic Routing
               </button>
             </div>
-          </div>
+            </div>
 
           {/* Pricing Agent */}
           <div className="border rounded p-4">

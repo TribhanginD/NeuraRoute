@@ -70,50 +70,50 @@ const AgentMonitor: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="card">
           <div className="flex items-center justify-between">
-            <div>
+                <div>
               <p className="text-sm font-medium text-gray-600">Total Agents</p>
               <p className="text-2xl font-bold text-gray-900">{agents.length}</p>
-            </div>
+                </div>
             <div className="p-2 bg-blue-100 rounded-lg">
               <Activity className="w-6 h-6 text-blue-600" />
             </div>
           </div>
-        </div>
+              </div>
 
         <div className="card">
           <div className="flex items-center justify-between">
-            <div>
+                <div>
               <p className="text-sm font-medium text-gray-600">Running</p>
               <p className="text-2xl font-bold text-green-600">{agents.filter(a => a.status === 'running').length}</p>
             </div>
             <div className="p-2 bg-green-100 rounded-lg">
               <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
+                    </div>
+                  </div>
+                </div>
 
         <div className="card">
           <div className="flex items-center justify-between">
-            <div>
+                <div>
               <p className="text-sm font-medium text-gray-600">Stopped</p>
               <p className="text-2xl font-bold text-red-600">{agents.filter(a => a.status === 'stopped').length}</p>
-            </div>
+                    </div>
             <div className="p-2 bg-red-100 rounded-lg">
               <AlertTriangle className="w-6 h-6 text-red-600" />
-            </div>
-          </div>
-        </div>
+                  </div>
+                </div>
+              </div>
 
         <div className="card">
           <div className="flex items-center justify-between">
-            <div>
+              <div>
               <p className="text-sm font-medium text-gray-600">Avg Health</p>
               <p className="text-2xl font-bold text-gray-900">
                 {agents.length > 0 
                   ? Math.round(agents.reduce((sum, agent) => sum + (agent.health || 0), 0) / agents.length)
                   : 0}%
               </p>
-            </div>
+              </div>
             <div className="p-2 bg-gray-100 rounded-lg">
               <Activity className="w-6 h-6 text-gray-600" />
             </div>
@@ -213,7 +213,7 @@ const AgentMonitor: React.FC = () => {
                     <button className="flex-1 btn-secondary text-sm">Restart</button>
                   </div>
                 </div>
-              </div>
+          </div>
             ))}
           </div>
         )}

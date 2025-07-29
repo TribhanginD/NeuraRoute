@@ -45,7 +45,7 @@ const Dashboard = () => {
     const agents = await supabaseService.getAgents();
     const vehicles = await supabaseService.getFleet();
     const inventory = await supabaseService.getInventory();
-
+      
     // Calculate stats
     const newStats = {
       activeOrders: orders.filter(o => o.status === 'pending').length,
@@ -163,7 +163,7 @@ const Dashboard = () => {
                 <span className={`text-sm font-medium ${status === 'healthy' || status === 'running' ? 'text-green-600' : 'text-red-600'}`}>
                   {status.charAt(0).toUpperCase() + status.slice(1)}
                 </span>
-              </div>
+            </div>
             ))}
           </div>
         </div>
@@ -225,12 +225,12 @@ const Dashboard = () => {
                         New order received
                       </span>
                       <span className="text-xs text-gray-500">{timestamp}</span>
-                    </div>
+            </div>
                     <p className="text-sm text-gray-600 mt-1">
                       Order #{shortOrderId} • {itemsText}
                     </p>
-                  </div>
-                </div>
+            </div>
+            </div>
               );
             })}
           </div>

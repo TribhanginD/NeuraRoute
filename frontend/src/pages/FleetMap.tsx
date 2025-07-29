@@ -125,10 +125,10 @@ const FleetMap: React.FC = () => {
                         {route.estimated_completion && (
                           <div>ETA: {new Date(route.estimated_completion).toLocaleString()}</div>
                         )}
-                      </div>
-                    </div>
+            </div>
+            </div>
                   ))}
-                </div>
+            </div>
               </div>
             )}
           </div>

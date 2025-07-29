@@ -24,6 +24,14 @@ An intelligent operating system for small city sectors, featuring autonomous age
 - **Market Day Simulations**: Predefined scenarios for testing and demonstration
 - **Real-time Action Monitoring**: Live tracking of agent decisions and their impact
 - **Comprehensive Audit Trail**: Complete history of all actions, approvals, and executions
+- **🆕 Realistic Business Workflow**: Purchase orders and disposal orders instead of direct inventory manipulation
+
+### 🆕 Purchase Order & Disposal Order System
+- **Purchase Orders**: Agents create purchase orders for inventory increases (restock, reorder, new items)
+- **Disposal Orders**: Agents create disposal orders for inventory decreases (clearance, discontinuation)
+- **Order Tracking**: Complete order lifecycle with status tracking (pending, ordered, shipped, received, cancelled)
+- **Realistic Inventory Management**: Professional workflow that mirrors real business operations
+- **Order Details**: Comprehensive order information including quantities, delivery dates, locations, and reasons
 
 ### Frontend Components
 - **Merchant Chat Interface**: Real-time communication with merchants
@@ -49,6 +57,12 @@ An intelligent operating system for small city sectors, featuring autonomous age
                         ┌─────────────────┐
                         │ 🆕 Agentic AI   │
                         │   System        │
+                        └─────────────────┘
+                                │
+                        ┌─────────────────┐
+                        │ 🆕 Purchase &    │
+                        │   Disposal      │
+                        │   Orders        │
                         └─────────────────┘
 ```
 
@@ -149,11 +163,28 @@ The agentic system can process situations through the frontend interface:
 5. View live routes on the Fleet Map
 6. Chat with merchants through the Merchant Chat interface
 
+### 🆕 Purchase Order & Disposal Order Workflow
+
+#### Agent Actions
+- **Increase Actions**: Create purchase orders for inventory restocking
+- **Decrease Actions**: Create disposal orders for inventory clearance
+- **Discontinue Actions**: Create disposal orders for discontinued items
+- **Maintain Actions**: No orders created (status quo)
+
+#### Order Types
+- **Purchase Orders**: `restock`, `reorder`, `new_item`
+- **Disposal Orders**: `clearance`, `donation`, `destruction`, `return`
+
+#### Order Status Tracking
+- **Purchase Orders**: `pending` → `ordered` → `shipped` → `received` → `cancelled`
+- **Disposal Orders**: `pending` → `approved` → `completed` → `cancelled`
+
 ### Database Setup
 1. Create a Supabase project
 2. Run the SQL scripts in `database/` to set up tables
-3. Configure environment variables with your Supabase credentials
-4. The frontend will automatically connect to Supabase for all data operations
+3. **🆕 Run the purchase orders schema script** (`database/purchase_orders_schema.sql`)
+4. Configure environment variables with your Supabase credentials
+5. The frontend will automatically connect to Supabase for all data operations
 
 ## 📊 Database Schema
 
@@ -163,10 +194,49 @@ The system uses the following Supabase tables:
 - `inventory` - Product inventory and stock levels
 - `orders` - Customer orders and delivery information
 - `agents` - AI agent configurations and status
-- `agentic_actions` - Pending and historical agent actions
-- `agent_decisions` - Agent decision history
+- `agent_actions` - Pending and historical agent actions
+- `agent_logs` - Agent decision history
 - `simulation_status` - Current simulation state
 - `agent_plans` - Agent execution plans
+- **🆕 `purchase_orders`** - Purchase order tracking for inventory management
+- **🆕 `disposal_orders`** - Disposal order tracking for inventory clearance
+
+### 🆕 New Database Tables
+
+#### Purchase Orders Table
+```sql
+CREATE TABLE purchase_orders (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    item_id UUID REFERENCES inventory(id),
+    item_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    order_type TEXT NOT NULL CHECK (order_type IN ('restock', 'reorder', 'new_item')),
+    status TEXT NOT NULL DEFAULT 'pending',
+    requested_by TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    expected_delivery TIMESTAMP WITH TIME ZONE,
+    location TEXT,
+    reason TEXT,
+    cost_per_unit DECIMAL(10,2),
+    total_cost DECIMAL(10,2)
+);
+```
+
+#### Disposal Orders Table
+```sql
+CREATE TABLE disposal_orders (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    item_id UUID REFERENCES inventory(id),
+    quantity INTEGER NOT NULL,
+    disposal_type TEXT NOT NULL CHECK (disposal_type IN ('clearance', 'donation', 'destruction', 'return')),
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    reason TEXT,
+    location TEXT,
+    disposal_method TEXT,
+    cost_savings DECIMAL(10,2)
+);
+```
 
 ## 🔧 Development
 
@@ -181,6 +251,7 @@ npm start
 ```bash
 # Run SQL scripts in Supabase SQL editor
 # See database/ directory for schema files
+# 🆕 Don't forget to run purchase_orders_schema.sql for the new order system
 ```
 
 ### Testing

@@ -11,7 +11,6 @@ import AgentMonitor from './pages/AgentMonitor';
 import FleetMap from './pages/FleetMap';
 import InventoryView from './pages/InventoryView';
 import MerchantChat from './pages/MerchantChat';
-import SimulationControl from './pages/SimulationControl';
 import AgenticAI from './pages/AgenticAI';
 
 // Create a client
@@ -39,7 +38,6 @@ function App() {
               <Route path="/fleet" element={<FleetMap />} />
               <Route path="/inventory" element={<InventoryView />} />
               <Route path="/chat" element={<MerchantChat />} />
-              <Route path="/simulation" element={<SimulationControl />} />
             </Routes>
           </main>
         </div>

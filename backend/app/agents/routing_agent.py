@@ -1,10 +1,10 @@
 import asyncio
 from typing import Dict, Any, Optional, List
 from .base_agent import BaseAgent
-from app.main import broadcast_agent_action
+# Avoid circular import by importing broadcast_agent_action lazily inside methods
 
 class RoutingAgent(BaseAgent):
-    def __init__(self, agent_id: str = "routing_agent_001"):
+    def __init__(self, agent_id: str = "bb0e8400-e29b-41d4-a716-446655440001"):
         super().__init__(agent_id, "route_optimization")
     
     async def process(self) -> bool:
@@ -216,6 +216,8 @@ class RoutingAgent(BaseAgent):
                 }
                 
                 result = self.supabase.table("agent_actions").insert(assignment_data).execute()
+                # Avoid circular import by importing broadcast_agent_action lazily inside methods
+                from app.main import broadcast_agent_action
                 broadcast_agent_action(assignment_data)
                 
                 # Update vehicle status

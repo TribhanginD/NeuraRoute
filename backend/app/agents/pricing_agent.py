@@ -1,10 +1,10 @@
 import asyncio
 from typing import Dict, Any, Optional, List
 from .base_agent import BaseAgent
-from app.main import broadcast_agent_action
+# Avoid circular import by importing broadcast_agent_action lazily inside methods
 
 class PricingAgent(BaseAgent):
-    def __init__(self, agent_id: str = "pricing_agent_001"):
+    def __init__(self, agent_id: str = "cc0e8400-e29b-41d4-a716-446655440001"):
         super().__init__(agent_id, "pricing_optimization")
     
     async def process(self) -> bool:
@@ -85,7 +85,7 @@ class PricingAgent(BaseAgent):
                 
                 if decision:
                     await self.log_action("market_analysis", decision)
-        
+            
         except Exception as e:
             print(f"Error analyzing market conditions: {e}")
     
@@ -254,6 +254,7 @@ class PricingAgent(BaseAgent):
                 }
                 
                 result = self.supabase.table("agent_actions").insert(action_data).execute()
+                from app.main import broadcast_agent_action  # lazy import
                 broadcast_agent_action(action_data)
                 
                 await self.log_action("dynamic_pricing_action", rec)

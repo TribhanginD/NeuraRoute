@@ -21,7 +21,6 @@ import { supabaseService } from '../services/supabaseService.ts';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Simulation', href: '/simulation', icon: Play },
   { name: 'Agents', href: '/agents', icon: Users },
   { name: 'Fleet', href: '/fleet', icon: Truck },
   { name: 'Inventory', href: '/inventory', icon: Package },

@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
-import SimulationControl from './components/SimulationControl';
 import AgentMonitor from './components/AgentMonitor';
 import FleetMap from './components/FleetMap';
 import InventoryView from './components/InventoryView';
@@ -117,21 +116,6 @@ function App() {
                     transition={pageTransition}
                   >
                     <Dashboard />
-                  </motion.div>
-                }
-              />
-              <Route
-                path="/simulation"
-                element={
-                  <motion.div
-                    key="simulation"
-                    initial="initial"
-                    animate="in"
-                    exit="out"
-                    variants={pageVariants}
-                    transition={pageTransition}
-                  >
-                    <SimulationControl />
                   </motion.div>
                 }
               />
