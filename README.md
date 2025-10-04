@@ -2,31 +2,31 @@
 
 An intelligent operating system for small city sectors, featuring autonomous agents, demand forecasting, and real-time logistics optimization with **agentic AI capabilities** for autonomous decision-making and action-taking.
 
-## 🚀 Features
+##  Features
 
 ### Core System
 - **LCM-Style Demand Forecaster**: AI-powered demand prediction using structured context
 - **LAM-Style Autonomous Agents**: Goal-driven planners executing toolchains
-- **🆕 Agentic AI System**: Autonomous decision-making with approval workflows
+- **Agentic AI System**: Autonomous decision-making with approval workflows
 - **15-Minute Tick Simulation**: Real-time state updates in Supabase
 - **Professional Frontend**: Modern UI with merchant chat, ops console, live route map, agent logs, and simulation playback
 
 ### AI/ML Capabilities
 - **Intelligent Demand Forecasting**: Weather, events, historical data, seasonal factors
 - **Autonomous Agent Coordination**: Restock, Route, Pricing, Dispatch, Forecasting agents
-- **🆕 Agentic Decision Making**: LangChain agents with function-calling for autonomous actions
+- **Agentic Decision Making**: LangChain agents with function-calling for autonomous actions
 - **Real-time Route Optimization**: Dynamic fleet management and route planning
 - **Predictive Analytics**: Market condition analysis and trend prediction
 
-### 🆕 Agentic AI Features
+### Agentic AI Features
 - **Autonomous Action Taking**: Agents can place orders, reroute drivers, update inventory, adjust pricing, and dispatch fleet
 - **Smart Approval Workflows**: Automatic approval for low-risk actions, manual approval for high-value decisions
 - **Market Day Simulations**: Predefined scenarios for testing and demonstration
 - **Real-time Action Monitoring**: Live tracking of agent decisions and their impact
 - **Comprehensive Audit Trail**: Complete history of all actions, approvals, and executions
-- **🆕 Realistic Business Workflow**: Purchase orders and disposal orders instead of direct inventory manipulation
+- **Realistic Business Workflow**: Purchase orders and disposal orders instead of direct inventory manipulation
 
-### 🆕 Purchase Order & Disposal Order System
+### Purchase Order & Disposal Order System
 - **Purchase Orders**: Agents create purchase orders for inventory increases (restock, reorder, new items)
 - **Disposal Orders**: Agents create disposal orders for inventory decreases (clearance, discontinuation)
 - **Order Tracking**: Complete order lifecycle with status tracking (pending, ordered, shipped, received, cancelled)
@@ -36,12 +36,12 @@ An intelligent operating system for small city sectors, featuring autonomous age
 ### Frontend Components
 - **Merchant Chat Interface**: Real-time communication with merchants
 - **Operations Console**: Centralized control and monitoring
-- **🆕 Agentic Dashboard**: Action approval interface and simulation controls
+- **Agentic Dashboard**: Action approval interface and simulation controls
 - **Live Route Map**: Real-time fleet tracking and route visualization
 - **Agent Monitor**: Live agent status and performance metrics
 - **Simulation Playback**: Historical data review and analysis
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -55,18 +55,18 @@ An intelligent operating system for small city sectors, featuring autonomous age
                         └─────────────────┘
                                 │
                         ┌─────────────────┐
-                        │ 🆕 Agentic AI   │
+                        │ � Agentic AI   │
                         │   System        │
                         └─────────────────┘
                                 │
                         ┌─────────────────┐
-                        │ 🆕 Purchase &    │
+                        │  Purchase &    │
                         │   Disposal      │
                         │   Orders        │
                         └─────────────────┘
 ```
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 ### Data Layer
 - **Supabase** for primary database and real-time subscriptions
@@ -79,25 +79,25 @@ An intelligent operating system for small city sectors, featuring autonomous age
 - **Mapbox/Leaflet** for mapping
 - **React Query** for data fetching
 - **Zustand** for state management
-- **🆕 Agentic UI Components** for action approval and simulation
+- ** Agentic UI Components** for action approval and simulation
 - **Supabase JS Client** for database operations
 
 ### AI/ML
 - **GPT-4o** and **Anthropic Claude** for reasoning
-- **🆕 Function Calling** for autonomous action execution
+- ** Function Calling** for autonomous action execution
 - **Prophet** for time series forecasting
 - **YOLO** for traffic analysis
 - **BERT/RoBERTa** for sentiment analysis
 - **Graph Neural Networks** for route optimization
 - **Stable Baselines3** for reinforcement learning
 
-## 📦 Installation
+##  Installation
 
 ### Prerequisites
 - Docker and Docker Compose
 - Node.js 18+ (for development)
-- **🆕 Supabase account and project**
-- **🆕 OpenAI API key or Anthropic API key**
+- ** Supabase account and project**
+- ** OpenAI API key or Anthropic API key**
 
 ### Quick Start
 ```bash
@@ -119,7 +119,7 @@ echo "ANTHROPIC_API_KEY=your_anthropic_api_key" >> .env
 
 # Access the application
 # Frontend: http://localhost:3000
-# 🆕 Agentic Dashboard: http://localhost:3000/agentic
+# Agentic Dashboard: http://localhost:3000/agentic
 ```
 
 ### Manual Setup
@@ -133,7 +133,7 @@ docker-compose up -d redis
 npm start
 ```
 
-## 🚀 Usage
+##  Usage
 
 ### Starting the System
 ```bash
@@ -145,7 +145,7 @@ docker-compose up -d redis
 cd frontend && npm start
 ```
 
-### 🆕 Agentic AI Usage
+### Agentic AI Usage
 
 #### Process a Situation
 The agentic system can process situations through the frontend interface:
@@ -158,12 +158,12 @@ The agentic system can process situations through the frontend interface:
 #### Run Market Day Simulation
 1. Access the Operations Console at `http://localhost:3000`
 2. Use the Simulation Control panel to start/stop the 15-minute tick loop
-3. **🆕 Use the Agentic Dashboard for autonomous action approval**
+3. ** Use the Agentic Dashboard for autonomous action approval**
 4. Monitor agent performance in the Agent Monitor
 5. View live routes on the Fleet Map
 6. Chat with merchants through the Merchant Chat interface
 
-### 🆕 Purchase Order & Disposal Order Workflow
+###  Purchase Order & Disposal Order Workflow
 
 #### Agent Actions
 - **Increase Actions**: Create purchase orders for inventory restocking
@@ -182,11 +182,11 @@ The agentic system can process situations through the frontend interface:
 ### Database Setup
 1. Create a Supabase project
 2. Run the SQL scripts in `database/` to set up tables
-3. **🆕 Run the purchase orders schema script** (`database/purchase_orders_schema.sql`)
+3. ** Run the purchase orders schema script** (`database/purchase_orders_schema.sql`)
 4. Configure environment variables with your Supabase credentials
 5. The frontend will automatically connect to Supabase for all data operations
 
-## 📊 Database Schema
+##  Database Schema
 
 The system uses the following Supabase tables:
 - `fleet` - Vehicle and driver information
@@ -198,10 +198,10 @@ The system uses the following Supabase tables:
 - `agent_logs` - Agent decision history
 - `simulation_status` - Current simulation state
 - `agent_plans` - Agent execution plans
-- **🆕 `purchase_orders`** - Purchase order tracking for inventory management
-- **🆕 `disposal_orders`** - Disposal order tracking for inventory clearance
+- ** `purchase_orders`** - Purchase order tracking for inventory management
+- ** `disposal_orders`** - Disposal order tracking for inventory clearance
 
-### 🆕 New Database Tables
+###  New Database Tables
 
 #### Purchase Orders Table
 ```sql
@@ -238,7 +238,7 @@ CREATE TABLE disposal_orders (
 );
 ```
 
-## 🔧 Development
+##  Development
 
 ### Frontend Development
 ```bash
@@ -251,7 +251,7 @@ npm start
 ```bash
 # Run SQL scripts in Supabase SQL editor
 # See database/ directory for schema files
-# 🆕 Don't forget to run purchase_orders_schema.sql for the new order system
+#  Don't forget to run purchase_orders_schema.sql for the new order system
 ```
 
 ### Testing
@@ -259,7 +259,3 @@ npm start
 cd frontend
 npm test
 ```
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
