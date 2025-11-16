@@ -91,6 +91,23 @@ start_services() {
         exit 1
     fi
     
+    # Start backend
+    print_status "Starting backend service..."
+    docker-compose up -d backend
+    
+    print_status "Waiting for backend to be ready..."
+    for attempt in {1..12}; do
+        if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+            print_success "Backend is responding"
+            break
+        fi
+        sleep 5
+        if [ "$attempt" -eq 12 ]; then
+            print_error "Backend failed to become ready"
+            exit 1
+        fi
+    done
+    
     # Start frontend
     print_status "Starting frontend service..."
     docker-compose up -d frontend
@@ -113,6 +130,14 @@ health_check() {
         print_error "Some containers are not running"
         docker-compose ps
         exit 1
+    fi
+    
+    # Check backend endpoint
+    print_status "Checking backend endpoint..."
+    if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+        print_success "Backend is responding"
+    else
+        print_warning "Backend health check failed"
     fi
     
     # Check frontend endpoint

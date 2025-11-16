@@ -2,24 +2,17 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Home, 
-  Activity, 
   Map, 
   Package, 
-  MessageSquare, 
-  Settings,
   BarChart3,
-  Truck,
-  Users,
   Brain
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
-  { name: 'Agents', href: '/agents', icon: Activity },
-  { name: 'Agentic AI', href: '/agentic', icon: Brain },
+  { name: 'Agentic Dashboard', href: '/agentic', icon: Brain },
   { name: 'Fleet Map', href: '/fleet', icon: Map },
   { name: 'Inventory', href: '/inventory', icon: Package },
-  { name: 'Merchant Chat', href: '/chat', icon: MessageSquare },
 ];
 
 const Sidebar: React.FC = () => {

@@ -58,6 +58,10 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    depends_on:
+      - redis
+    networks:
+      - neuraroute-network
 
 volumes:
   redis_data:

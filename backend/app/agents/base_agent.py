@@ -1,8 +1,12 @@
+import asyncio
 import json
 from abc import ABC
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+from ..ai.ag2_engine import AgenticDecisionEngine
 from ..ai.groq_client import groq_client
+from ..core.config import settings
 
 class BaseAgent(ABC):
     def __init__(self, agent_id: str, agent_type: str):
@@ -11,6 +15,8 @@ class BaseAgent(ABC):
         from ..core.supabase import supabase_client
         self.supabase = supabase_client.get_client()
         self.is_active = True
+        self.last_action_time: Optional[str] = None
+        self.decision_engine = AgenticDecisionEngine(agent_type)
     
     async def log_action(self, action: str, details: Dict[str, Any], status: str = "completed"):
         """Log agent action to Supabase"""
@@ -32,6 +38,18 @@ class BaseAgent(ABC):
     async def get_context(self) -> Dict[str, Any]:
         """Get current system context for decision making, with limited context size."""
         try:
+            def serialize(records):
+                result = []
+                for rec in records or []:
+                    normalized = {}
+                    for k, v in rec.items():
+                        if isinstance(v, datetime):
+                            normalized[k] = v.isoformat()
+                        else:
+                            normalized[k] = v
+                    result.append(normalized)
+                return result
+
             # Get actual counts from the database
             inventory_response = self.supabase.table("inventory").select("id", count="exact").execute()
             inventory_count = inventory_response.count if hasattr(inventory_response, 'count') else len(inventory_response.data or [])
@@ -43,17 +61,17 @@ class BaseAgent(ABC):
             orders_count = orders_response.count if hasattr(orders_response, 'count') else len(orders_response.data or [])
 
             # Get a sample of recent data for context (limited to avoid Groq limits)
-            recent_inventory = self.supabase.table("inventory").select("id, name, quantity, location").limit(3).execute()
-            recent_fleet = self.supabase.table("fleet").select("id, vehicle_type, status").limit(2).execute()
-            recent_orders = self.supabase.table("orders").select("id, status, total_amount").order("created_at", desc=True).limit(2).execute()
+            recent_inventory = self.supabase.table("inventory").select("*").limit(3).execute()
+            recent_fleet = self.supabase.table("fleet").select("*").limit(2).execute()
+            recent_orders = self.supabase.table("orders").select("*").order("created_at", desc=True).limit(2).execute()
 
             return {
                 "inventory_summary": f"{inventory_count} total items",
                 "fleet_summary": f"{fleet_count} total vehicles",
                 "orders_summary": f"{orders_count} total orders",
-                "recent_inventory": recent_inventory.data or [],
-                "recent_fleet": recent_fleet.data or [],
-                "recent_orders": recent_orders.data or [],
+                "recent_inventory": serialize(recent_inventory.data),
+                "recent_fleet": serialize(recent_fleet.data),
+                "recent_orders": serialize(recent_orders.data),
                 "timestamp": datetime.utcnow().isoformat()
             }
         except Exception as e:
@@ -130,81 +148,105 @@ class BaseAgent(ABC):
             return False
     
     async def make_decision(self, prompt: str, response_format: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Make a decision using Groq LLM and log to agent_actions."""
+        """Make a decision using AG2 (Groq-backed) with Supabase logging."""
         try:
             print(f"\n🤖 [AGENT DECISION] {self.agent_id} ({self.agent_type})")
             print(f"📋 Prompt: {prompt[:200]}{'...' if len(prompt) > 200 else ''}")
-            
+
             context = await self.get_context()
-            # Add context to prompt
-            enhanced_prompt = f"""
-            Current System Context:
-            {json.dumps(context, indent=2)}
-            Decision Request:
-            {prompt}
-            Please analyze the context and provide a decision in the specified format.
-            """
-            
+            enhanced_prompt = (
+                "Current System Context:\n"
+                f"{json.dumps(context, indent=2)}\n"
+                "Decision Request:\n"
+                f"{prompt}\n"
+                "Please analyze the context and provide a decision in the specified format."
+            )
+
             print(f"📋 Enhanced Prompt: {enhanced_prompt[:300]}{'...' if len(enhanced_prompt) > 300 else ''}")
             print(f"📋 Response Format: {json.dumps(response_format, indent=2)}")
-            
-            decision = await groq_client.get_structured_response(
-                enhanced_prompt, 
-                response_format,
-                temperature=0.3
+
+            decision: Optional[Any] = None
+
+            if self.decision_engine.is_configured:
+                decision = await self.decision_engine.a_make_decision(
+                    context=context,
+                    prompt=enhanced_prompt,
+                    response_format=response_format,
+                )
+                if decision:
+                    print(f"✅ [AG2 DECISION SUCCESS] {self.agent_id}")
+
+            if not decision:
+                decision = await groq_client.get_structured_response(
+                    enhanced_prompt,
+                    response_format,
+                    temperature=settings.GROQ_TEMPERATURE,
+                )
+                if decision:
+                    print(f"✅ [GROQ FALLBACK SUCCESS] {self.agent_id}")
+
+            if not decision:
+                print(f"❌ [AGENT DECISION FAILED] {self.agent_id} - No decision returned from LLM")
+                return None
+
+            print(f"📊 Decision: {json.dumps(decision, indent=2)}")
+
+            # Duplicate avoidance
+            if isinstance(decision, dict):
+                if await self.check_for_duplicate_decision(decision):
+                    print(f"⏭️ [SKIPPING DUPLICATE] Decision for {decision.get('item_id')} already exists")
+                    return decision
+            elif isinstance(decision, list):
+                filtered_decisions = []
+                for single in decision:
+                    if not await self.check_for_duplicate_decision(single):
+                        filtered_decisions.append(single)
+                    else:
+                        print(f"⏭️ [SKIPPING DUPLICATE] Decision for {single.get('item_id')} already exists")
+                if not filtered_decisions:
+                    print(f"⏭️ [ALL DECISIONS DUPLICATE] No new decisions to create")
+                    return decision
+                decision = filtered_decisions
+
+            await self.log_action(
+                "decision_made",
+                {"prompt": prompt, "decision": decision, "response_format": response_format},
             )
-            
-            if decision:
-                print(f"✅ [AGENT DECISION SUCCESS] {self.agent_id}")
-                print(f"📊 Decision: {json.dumps(decision, indent=2)}")
-                
-                # Check for duplicates before creating actions
-                if isinstance(decision, dict):
-                    # For single decisions
-                    if await self.check_for_duplicate_decision(decision):
-                        print(f"⏭️ [SKIPPING DUPLICATE] Decision for {decision.get('item_id')} already exists")
-                        return decision
-                elif isinstance(decision, list):
-                    # For multiple decisions, check each one
-                    filtered_decisions = []
-                    for single_decision in decision:
-                        if not await self.check_for_duplicate_decision(single_decision):
-                            filtered_decisions.append(single_decision)
-                        else:
-                            print(f"⏭️ [SKIPPING DUPLICATE] Decision for {single_decision.get('item_id')} already exists")
-                    
-                    if not filtered_decisions:
-                        print(f"⏭️ [ALL DECISIONS DUPLICATE] No new decisions to create")
-                        return decision
-                    
-                    decision = filtered_decisions
-                
-                await self.log_action("decision_made", {
-                    "prompt": prompt,
-                    "decision": decision,
-                    "response_format": response_format
-                })
-                # Insert a generic agent action for every decision (unless subclass does more specific insert)
-                action_data = {
-                    "agent_id": self.agent_id,
-                    "action_type": "decision",
-                    "payload": decision,  # Use the actual decision dict for jsonb
-                    "status": "pending",
-                    "created_at": datetime.utcnow().isoformat()
-                }
-                try:
-                    self.supabase.table("agent_actions").insert(action_data).execute()
-                    print(f"✅ [AGENT ACTION CREATED] {self.agent_id} - Action ID: {action_data.get('id', 'N/A')}")
-                except Exception as e:
-                    print(f"❌ [AGENT ACTION ERROR] {self.agent_id} - Error: {e}")
-            else:
-                print(f"❌ [AGENT DECISION FAILED] {self.agent_id} - No decision returned from Groq")
-                
+
+            action_data = {
+                "agent_id": self.agent_id,
+                "action_type": "decision",
+                "payload": decision,
+                "status": "pending",
+                "created_at": datetime.utcnow().isoformat(),
+            }
+            try:
+                self.supabase.table("agent_actions").insert(action_data).execute()
+                print(f"✅ [AGENT ACTION CREATED] {self.agent_id}")
+            except Exception as db_error:
+                print(f"❌ [AGENT ACTION ERROR] {self.agent_id} - Error: {db_error}")
+
             return decision
         except Exception as e:
             print(f"❌ [AGENT DECISION ERROR] {self.agent_id} - Error: {e}")
             await self.log_action("decision_error", {"error": str(e)}, "error")
             return None
-    
-    # Remove the run method and the abstract process method
-    # Agents will only act when triggered via API 
+
+    async def run(self) -> None:
+        """Background execution loop for autonomous behaviour."""
+        print(f"▶️  Starting loop for {self.agent_id} ({self.agent_type})")
+        try:
+            while self.is_active:
+                try:
+                    await self.process()
+                    self.last_action_time = datetime.utcnow().isoformat()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as loop_error:
+                    print(f"❌ [AGENT LOOP ERROR] {self.agent_id} - {loop_error}")
+                    await self.log_action("loop_error", {"error": str(loop_error)}, "error")
+                await asyncio.sleep(settings.AGENT_UPDATE_INTERVAL)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            print(f"⏹️  Stopped loop for {self.agent_id} ({self.agent_type})")

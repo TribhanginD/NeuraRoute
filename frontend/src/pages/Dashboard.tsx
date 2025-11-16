@@ -1,16 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useQuery } from 'react-query';
-import { 
-  TrendingUp, 
-  Package, 
-  Truck, 
-  Users, 
-  Activity,
-  AlertTriangle,
-  CheckCircle
-} from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { supabaseService } from '../services/supabaseService.ts';
+import React, { useEffect, useState } from 'react'
+import { Package, Truck, Activity, AlertTriangle, CheckCircle } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+
+import { supabaseService } from '../services/supabaseService'
+import { agenticApi } from '../services/agenticApi'
 
 const Dashboard: React.FC = () => {
   const [metrics, setMetrics] = useState({
@@ -19,33 +12,59 @@ const Dashboard: React.FC = () => {
     vehiclesAvailable: 0,
     inventoryItems: 0,
     systemHealth: 0,
-    pendingDeliveries: 0
-  });
-  const [chartData, setChartData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+    pendingDeliveries: 0,
+  })
+  const [chartData, setChartData] = useState([] as Array<{ time: string; orders: number; deliveries: number }>)
+  const [recentActivity, setRecentActivity] = useState([] as Array<{ action: string; time: string; type: string }>)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
-      const orders = await supabaseService.getOrders();
-      const agents = await supabaseService.getAgents();
-      const vehicles = await supabaseService.getFleet();
-      const inventory = await supabaseService.getInventory();
-      console.log('Dashboard fetched:', { orders, agents, vehicles, inventory });
-      const newMetrics = {
-        totalOrders: orders.length,
-        activeAgents: agents.length,
+      setIsLoading(true)
+      const [stats, orders, vehicles, inventory, logs] = await Promise.all([
+        agenticApi.getSystemStats(),
+        supabaseService.getOrders(),
+        supabaseService.getFleet(),
+        supabaseService.getInventory(),
+        supabaseService.getAgentLogs(null, 5),
+      ])
+
+      setMetrics({
+        totalOrders: stats.orders,
+        activeAgents: stats.agent_actions,
         vehiclesAvailable: vehicles.length,
         inventoryItems: inventory.length,
-        systemHealth: 100,
-        pendingDeliveries: orders.filter(o => o.status === 'pending').length
-      };
-      console.log('Dashboard metrics:', newMetrics);
-      setMetrics(newMetrics);
-      setIsLoading(false);
-    };
-    fetchData();
-  }, []);
+        systemHealth: stats.agents_running ? 100 : 65,
+        pendingDeliveries: orders.filter((o) => o.status === 'pending').length,
+      })
+
+      const grouped = orders.reduce<Record<string, { orders: number; deliveries: number }>>((acc, order) => {
+        const key = new Date(order.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        if (!acc[key]) {
+          acc[key] = { orders: 0, deliveries: 0 }
+        }
+        acc[key].orders += 1
+        if (order.status === 'delivered') {
+          acc[key].deliveries += 1
+        }
+        return acc
+      }, {})
+      setChartData(
+        Object.entries(grouped).map(([time, value]) => ({ time, ...value }))
+      )
+
+      setRecentActivity(
+        logs.map((log: any) => ({
+          action: log.action,
+          time: new Date(log.timestamp).toLocaleTimeString(),
+          type: log.status === 'completed' ? 'success' : 'info',
+        }))
+      )
+
+      setIsLoading(false)
+    }
+    fetchData()
+  }, [])
 
   if (isLoading) {
     return (
@@ -188,19 +207,12 @@ const Dashboard: React.FC = () => {
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
         <div className="space-y-3">
-          {[
-            { action: 'Route Agent optimized delivery route', time: '2 minutes ago', type: 'success' },
-            { action: 'New order received from Customer #1234', time: '5 minutes ago', type: 'info' },
-            { action: 'Inventory restocked for Product #567', time: '8 minutes ago', type: 'success' },
-            { action: 'Weather alert: Rain expected in downtown', time: '12 minutes ago', type: 'warning' },
-            { action: 'Vehicle #VH001 completed maintenance', time: '15 minutes ago', type: 'success' },
-          ].map((activity, index) => (
-            <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-              <div className={`w-2 h-2 rounded-full ${
-                activity.type === 'success' ? 'bg-green-500' :
-                activity.type === 'warning' ? 'bg-yellow-500' :
-                'bg-blue-500'
-              }`}></div>
+          {recentActivity.length === 0 && (
+            <p className="text-sm text-gray-500">No agent activity recorded yet.</p>
+          )}
+          {recentActivity.map((activity, index) => (
+            <div key={`${activity.action}-${index}`} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+              <div className={`w-2 h-2 rounded-full ${activity.type === 'success' ? 'bg-green-500' : 'bg-blue-500'}`} />
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">{activity.action}</p>
                 <p className="text-xs text-gray-500">{activity.time}</p>

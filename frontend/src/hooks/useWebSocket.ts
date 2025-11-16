@@ -1,21 +1,33 @@
 import { useState, useEffect, useRef } from 'react';
 
-export function useWebSocket(url) {
-  const [data, setData] = useState(null);
+type JsonValue = Record<string, unknown> | null;
+
+const getDefaultWebSocketUrl = (): string | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const host = window.location.hostname;
+  const port = process.env.REACT_APP_WS_PORT || '8000';
+  const path = process.env.REACT_APP_WS_PATH || '/ws/agent-actions';
+  return `${protocol}://${host}:${port}${path}`;
+};
+
+export function useWebSocket(url?: string) {
+  const resolvedUrl = url || process.env.REACT_APP_WS_URL || getDefaultWebSocketUrl();
+  const [data, setData] = useState<JsonValue>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState(null);
-  const wsRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
+  const [error, setError] = useState<Event | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectDelay = 1000; // Start with 1 second
 
   useEffect(() => {
-    if (!url) return;
+    if (!resolvedUrl) return;
 
     const connect = () => {
       try {
-        const ws = new WebSocket(url);
+        const ws = new WebSocket(resolvedUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -25,7 +37,7 @@ export function useWebSocket(url) {
           console.log('WebSocket connected');
         };
 
-        ws.onmessage = (event) => {
+        ws.onmessage = (event: MessageEvent) => {
           try {
             const parsedData = JSON.parse(event.data);
             setData(parsedData);
@@ -48,9 +60,9 @@ export function useWebSocket(url) {
           }
         };
 
-        ws.onerror = (error) => {
-          setError(error);
-          console.error('WebSocket error:', error);
+        ws.onerror = (socketError) => {
+          setError(socketError);
+          console.error('WebSocket error:', socketError);
         };
 
       } catch (err) {
@@ -70,9 +82,9 @@ export function useWebSocket(url) {
         wsRef.current.close(1000, 'Component unmounting');
       }
     };
-  }, [url]);
+  }, [resolvedUrl]);
 
-  const sendMessage = (message) => {
+  const sendMessage = (message: JsonValue) => {
     if (wsRef.current && isConnected) {
       wsRef.current.send(JSON.stringify(message));
     }

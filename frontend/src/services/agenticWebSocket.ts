@@ -1,16 +1,4 @@
-import { 
-  AgenticWebSocketMessage, 
-  WebSocketSubscription, 
-  WebSocketSubscriptionResponse,
-  SituationProcessedMessage,
-  ActionApprovedMessage,
-  ActionDeniedMessage,
-  StatusUpdateMessage,
-  SimulationModeChangedMessage
-} from '../types/agentic';
-
 class AgenticWebSocketService {
-  private url: string;
   private baseUrl: string;
 
   constructor() {

@@ -126,6 +126,30 @@ class AgenticApiService {
     return this.makeRequest('/api/v1/system/stats');
   }
 
+  async getSimulationStatus(): Promise<any> {
+    return this.makeRequest('/api/v1/simulation/status');
+  }
+
+  async startSimulation(): Promise<any> {
+    return this.makeRequest('/api/v1/simulation/start', { method: 'POST' });
+  }
+
+  async stopSimulation(): Promise<any> {
+    return this.makeRequest('/api/v1/simulation/stop', { method: 'POST' });
+  }
+
+  async stepSimulation(): Promise<any> {
+    return this.makeRequest('/api/v1/simulation/tick', { method: 'POST' });
+  }
+
+  async approveAction(actionId: string): Promise<any> {
+    return this.makeRequest(`/api/v1/agents/actions/${actionId}/approve`, { method: 'POST' });
+  }
+
+  async declineAction(actionId: string): Promise<any> {
+    return this.makeRequest(`/api/v1/agents/actions/${actionId}/decline`, { method: 'POST' });
+  }
+
   // Inventory agent actions
   async triggerInventoryCheck(): Promise<any> {
     return this.triggerAgentAction('inventory', 'check_low_stock');
@@ -168,5 +192,5 @@ class AgenticApiService {
 
 export const agenticApi = new AgenticApiService(); 
 
-// Re-export the agenticWebSocket service as agenticApi for cleaner imports
-export { agenticWebSocket as agenticApi } from './agenticWebSocket'; 
+// Export WebSocket helper separately for direct subscriptions where needed
+export { agenticWebSocket } from './agenticWebSocket';

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from .base_agent import BaseAgent
 # Avoid circular import by importing broadcast_agent_action lazily inside methods
@@ -209,12 +210,11 @@ class RoutingAgent(BaseAgent):
                 assignment_data = {
                     "agent_id": self.agent_id,
                     "action_type": "route_assignment",
-                    "vehicle_id": assignment.get("vehicle_id"),
-                    "route_data": assignment,
+                    "payload": assignment,
                     "status": "pending",
-                    "created_at": asyncio.get_event_loop().time()
+                    "created_at": datetime.utcnow().isoformat()
                 }
-                
+
                 result = self.supabase.table("agent_actions").insert(assignment_data).execute()
                 # Avoid circular import by importing broadcast_agent_action lazily inside methods
                 from app.main import broadcast_agent_action

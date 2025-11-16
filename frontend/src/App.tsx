@@ -1,59 +1,54 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from 'react-query';
-import { Toaster } from 'react-hot-toast';
-import './App.css';
+import React, { useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useQuery } from 'react-query'
 
-// Components
-import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import AgentMonitor from './pages/AgentMonitor';
-import FleetMap from './pages/FleetMap';
-import InventoryView from './pages/InventoryView';
-import MerchantChat from './pages/MerchantChat';
-import AgenticAI from './pages/AgenticAI';
+import Sidebar from './components/Sidebar'
+import Dashboard from './pages/Dashboard'
+import AgenticDashboard from './pages/AgenticDashboard'
+import FleetMap from './pages/FleetMap'
+import InventoryView from './pages/InventoryView'
+import { useSystemStore } from './stores/systemStore'
+import { useWebSocket } from './hooks/useWebSocket'
+import { agenticApi } from './services/agenticApi'
 
-// Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+const App: React.FC = () => {
+  const { setSystemStatus } = useSystemStore()
+  const wsUrl = process.env.REACT_APP_WS_URL
+  const { data: wsData } = useWebSocket(wsUrl)
 
-function App() {
+  const { data: systemStats } = useQuery(['system-stats'], () => agenticApi.getSystemStats(), {
+    refetchInterval: 30_000,
+    retry: 1,
+  })
+
+  useEffect(() => {
+    if (systemStats) {
+      setSystemStatus({ status: 'healthy', services: systemStats, timestamp: new Date().toISOString() })
+    }
+  }, [systemStats, setSystemStatus])
+
+  useEffect(() => {
+    if (!wsData) return
+    if (wsData.type === 'status_update') {
+      setSystemStatus(wsData.payload)
+    }
+  }, [wsData, setSystemStatus])
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <Router>
-        <div className="flex h-screen bg-gray-50">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/agents" element={<AgentMonitor />} />
-              <Route path="/agentic" element={<AgenticAI />} />
-              <Route path="/fleet" element={<FleetMap />} />
-              <Route path="/inventory" element={<InventoryView />} />
-              <Route path="/chat" element={<MerchantChat />} />
-            </Routes>
-          </main>
-        </div>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-            },
-          }}
-        />
-      </Router>
-    </QueryClientProvider>
-  );
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar />
+      <main className="flex-1 overflow-auto">
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/agentic" element={<AgenticDashboard />} />
+          <Route path="/fleet" element={<FleetMap />} />
+          <Route path="/inventory" element={<InventoryView />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </main>
+    </div>
+  )
 }
 
-export default App; 
+export default App

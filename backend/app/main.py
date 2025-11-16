@@ -3,13 +3,17 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocke
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from typing import Dict, Any, List, Set
+from typing import Dict, Any, List, Set, Optional
 import uvicorn
 import json
 from datetime import datetime, timedelta
 
 from .core.config import settings
 from .agents.manager import agent_manager
+from .services.simulation_engine import simulation_engine
+from .db.init_db import init_db
+
+init_db()
 
 # --- WebSocket for real-time agent actions ---
 class ConnectionManager:
@@ -34,14 +38,25 @@ class ConnectionManager:
 # Global connection manager instance
 agent_action_manager = ConnectionManager()
 
-def broadcast_agent_action(action: dict):
-    """Schedule a broadcast of a new agent action to all WebSocket clients."""
-    import asyncio
+
+def _schedule_broadcast(payload: dict) -> None:
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        asyncio.create_task(agent_action_manager.broadcast({"type": "agent_action", "action": action}))
+        asyncio.create_task(agent_action_manager.broadcast(payload))
     else:
-        loop.run_until_complete(agent_action_manager.broadcast({"type": "agent_action", "action": action}))
+        loop.run_until_complete(agent_action_manager.broadcast(payload))
+
+
+def broadcast_agent_action(action: dict):
+    """Schedule a broadcast of a new agent action to all WebSocket clients."""
+    _schedule_broadcast({"type": "agent_action", "action": action})
+
+
+if settings.SIMULATION_ENABLED:
+    async def _simulation_broadcast(payload: dict) -> None:
+        await agent_action_manager.broadcast(payload)
+
+    simulation_engine.set_broadcaster(_simulation_broadcast)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,10 +65,19 @@ async def lifespan(app: FastAPI):
     # Initialize agents
     await agent_manager.initialize_agents()
     print("Agents initialized successfully")
+    if settings.AUTO_START_AGENTS:
+        await agent_manager.start_agents()
+        print("Agents started automatically")
+    if settings.SIMULATION_ENABLED and settings.AUTO_START_SIMULATION:
+        await simulation_engine.start()
+        print("Simulation engine started automatically")
     yield
     # Shutdown
     print("Shutting down NeuraRoute Agentic System...")
-    # Remove /api/v1/agents/start and /api/v1/agents/stop endpoints, agents_running variable, and related logic
+    if agent_manager.is_running:
+        await agent_manager.stop_agents()
+    if settings.SIMULATION_ENABLED and simulation_engine.is_running:
+        await simulation_engine.stop()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -99,11 +123,11 @@ async def health_check():
         
         return {
             "status": "healthy",
-            "agents_running": False, # Agents are no longer managed globally
+            "agents_running": agent_manager.is_running,
             "agent_status": agent_status,
             "services": {
                 "api": "healthy",
-                "agents": "offline", # Agents are no longer managed globally
+                "agents": "running" if agent_manager.is_running else "idle",
                 "database": "healthy"  # Add actual DB check if needed
             }
         }
@@ -118,18 +142,42 @@ async def health_check():
             }
         }
 
-# Remove /api/v1/agents/start and /api/v1/agents/stop endpoints, agents_running variable, and related logic
-
 @app.get("/api/v1/agents/status")
 async def get_agent_status():
     """Get status of all agents"""
     try:
         status = await agent_manager.get_agent_status()
-        status["agents_running"] = False # Agents are no longer managed globally
+        status["agents_running"] = agent_manager.is_running
         
         return status
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting agent status: {str(e)}")
+
+@app.post("/api/v1/agents/start")
+async def start_agents():
+    """Start autonomous agents"""
+    try:
+        await agent_manager.start_agents()
+        return {
+            "message": "Agents started successfully",
+            "status": "success",
+            "agents_running": agent_manager.is_running
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error starting agents: {str(e)}")
+
+@app.post("/api/v1/agents/stop")
+async def stop_agents():
+    """Stop autonomous agents"""
+    try:
+        await agent_manager.stop_agents()
+        return {
+            "message": "Agents stopped successfully",
+            "status": "success",
+            "agents_running": agent_manager.is_running
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error stopping agents: {str(e)}")
 
 @app.get("/api/v1/agents/logs")
 async def get_agent_logs(limit: int = 50, agent_id: str = None):
@@ -526,8 +574,10 @@ async def trigger_agent_action(agent_type: str, action: str, data: Dict[str, Any
 async def get_system_stats():
     """Get system statistics"""
     try:
-        from .core.supabase import supabase_client
-        supabase = supabase_client.get_client()
+        from .core import supabase as supabase_module
+        if not supabase_module.is_supabase_configured():
+            raise RuntimeError("Supabase client is not configured")
+        supabase = supabase_module.get_supabase_client()
         
         # Get counts from different tables
         inventory_result = supabase.table("inventory").select("id", count="exact").execute()
@@ -542,10 +592,85 @@ async def get_system_stats():
             "fleet_vehicles": fleet_result.count if hasattr(fleet_result, 'count') else 0,
             "agent_logs": logs_result.count if hasattr(logs_result, 'count') else 0,
             "agent_actions": actions_result.count if hasattr(actions_result, 'count') else 0,
-            "agents_running": False # Agents are no longer managed globally
+            "agents_running": agent_manager.is_running
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting system stats: {str(e)}")
+
+
+def _list_table(table_name: str, order_column: Optional[str] = None, descending: bool = False) -> List[Dict[str, Any]]:
+    from .core import supabase as supabase_module
+    supabase = supabase_module.get_supabase_client()
+    query = supabase.table(table_name).select("*")
+    if order_column:
+        query = query.order(order_column, desc=descending)
+    result = query.execute()
+    return result.data if result.data else []
+
+
+@app.get("/api/v1/inventory")
+async def api_inventory():
+    return {"items": _list_table("inventory", "created_at", descending=True)}
+
+
+@app.get("/api/v1/fleet")
+async def api_fleet():
+    return {"items": _list_table("fleet", "created_at", descending=True)}
+
+
+@app.get("/api/v1/routes")
+async def api_routes():
+    return {"items": _list_table("routes", "created_at", descending=True)}
+
+
+@app.get("/api/v1/orders")
+async def api_orders():
+    return {"items": _list_table("orders", "created_at", descending=True)}
+
+
+@app.get("/api/v1/purchase-orders")
+async def api_purchase_orders():
+    return {"items": _list_table("purchase_orders", "created_at", descending=True)}
+
+
+@app.get("/api/v1/disposal-orders")
+async def api_disposal_orders():
+    return {"items": _list_table("disposal_orders", "created_at", descending=True)}
+
+
+@app.get("/api/v1/simulation/status")
+async def get_simulation_status():
+    """Return the current simulation snapshot used by the frontend dashboard."""
+    if not settings.SIMULATION_ENABLED:
+        return {"message": "Simulation disabled", "simulation": None}
+    return simulation_engine.snapshot.as_dict()
+
+
+@app.post("/api/v1/simulation/start")
+async def start_simulation():
+    """Start the background simulation loop."""
+    if not settings.SIMULATION_ENABLED:
+        return {"message": "Simulation disabled", "simulation": None}
+    snapshot = await simulation_engine.start()
+    return {"message": "Simulation started", "simulation": snapshot.as_dict()}
+
+
+@app.post("/api/v1/simulation/stop")
+async def stop_simulation():
+    """Stop the background simulation loop."""
+    if not settings.SIMULATION_ENABLED:
+        return {"message": "Simulation disabled", "simulation": None}
+    snapshot = await simulation_engine.stop()
+    return {"message": "Simulation stopped", "simulation": snapshot.as_dict()}
+
+
+@app.post("/api/v1/simulation/tick")
+async def manual_simulation_tick():
+    """Advance the simulation by a single tick (useful for demos/tests)."""
+    if not settings.SIMULATION_ENABLED:
+        return {"message": "Simulation disabled", "simulation": None}
+    snapshot = await simulation_engine.step()
+    return {"message": "Tick processed", "simulation": snapshot.as_dict()}
 
 @app.get("/api/v1/agents/duplicate-detection-config")
 async def get_duplicate_detection_config():

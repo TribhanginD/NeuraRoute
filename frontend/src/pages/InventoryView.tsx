@@ -1,21 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { Package, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
-import { supabaseService } from '../services/supabaseService.ts';
+import React, { useEffect, useState } from 'react'
+import { Package, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react'
+import { supabaseService } from '../services/supabaseService'
 
 const InventoryView: React.FC = () => {
-  const [inventory, setInventory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [inventory, setInventory] = useState<any[]>([])
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([])
+  const [disposalOrders, setDisposalOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchInventory = async () => {
-      setLoading(true);
-      const data = await supabaseService.getInventory();
-      console.log('Inventory data in UI:', data);
-      setInventory(data || []);
-      setLoading(false);
-    };
-    fetchInventory();
-  }, []);
+      setLoading(true)
+      const [items, purchases, disposals] = await Promise.all([
+        supabaseService.getInventory(),
+        supabaseService.getPurchaseOrders(10),
+        supabaseService.getDisposalOrders(10),
+      ])
+      setInventory(items || [])
+      setPurchaseOrders(purchases || [])
+      setDisposalOrders(disposals || [])
+      setLoading(false)
+    }
+    fetchInventory()
+  }, [])
 
   // Calculate stats from real data
   const stats = {
@@ -25,36 +32,7 @@ const InventoryView: React.FC = () => {
     outOfStock: inventory.filter(item => item.quantity === 0).length
   };
 
-  const getStatusColor = (item: any) => {
-    const quantity = item.quantity || 0;
-    const minQuantity = item.min_quantity || 0;
-    
-    if (quantity === 0) return 'text-red-600 bg-red-100';
-    if (quantity <= minQuantity) return 'text-yellow-600 bg-yellow-100';
-    return 'text-green-600 bg-green-100';
-  };
-
-  const getStatusText = (item: any) => {
-    const quantity = item.quantity || 0;
-    const minQuantity = item.min_quantity || 0;
-    
-    if (quantity === 0) return 'out of stock';
-    if (quantity <= minQuantity) return 'low stock';
-    return 'in stock';
-  };
-
-  const getStockLevel = (item: any) => {
-    const quantity = item.quantity || 0;
-    const minQuantity = item.min_quantity || 0;
-    const maxQuantity = item.max_quantity || 100;
-    
-    if (quantity === 0) return 0;
-    if (quantity <= minQuantity) return (quantity / minQuantity) * 33;
-    return 33 + ((quantity - minQuantity) / (maxQuantity - minQuantity)) * 67;
-  };
-
-  // Add debug log before rendering
-  console.log("Rendering inventory table with data:", inventory);
+  console.log('Rendering inventory table with data:', inventory)
 
   if (loading) {
     return (
@@ -165,6 +143,53 @@ const InventoryView: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Order Workflow */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Purchase Orders</h3>
+            <span className="text-sm text-gray-500">{purchaseOrders.length} records</span>
+          </div>
+          <div className="space-y-3 max-h-80 overflow-y-auto">
+            {purchaseOrders.length === 0 && <p className="text-sm text-gray-500">No purchase orders have been created yet.</p>}
+            {purchaseOrders.map((order) => (
+              <div key={order.id} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{order.item_name}</p>
+                    <p className="text-xs text-gray-500">{order.order_type} · {order.quantity} units</p>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 capitalize">{order.status}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Requested by {order.requested_by}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Disposal Orders</h3>
+            <span className="text-sm text-gray-500">{disposalOrders.length} records</span>
+          </div>
+          <div className="space-y-3 max-h-80 overflow-y-auto">
+            {disposalOrders.length === 0 && <p className="text-sm text-gray-500">No disposal orders have been logged.</p>}
+            {disposalOrders.map((order) => (
+              <div key={order.id} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{order.item_id || 'Unknown Item'}</p>
+                    <p className="text-xs text-gray-500">{order.disposal_type} · {order.quantity} units</p>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 capitalize">{order.status}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{order.reason || 'No reason provided'}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

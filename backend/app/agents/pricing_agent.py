@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from .base_agent import BaseAgent
 # Avoid circular import by importing broadcast_agent_action lazily inside methods
@@ -244,15 +245,18 @@ class PricingAgent(BaseAgent):
                     "agent_id": self.agent_id,
                     "action_type": "dynamic_pricing",
                     "target_table": "inventory",
-                    "item_id": rec.get("item_id"),
-                    "new_price": rec.get("new_price"),
-                    "strategy": rec.get("pricing_strategy"),
-                    "duration": rec.get("duration"),
-                    "reasoning": rec.get("reasoning"),
+                    "payload": {
+                        "item_id": rec.get("item_id"),
+                        "new_price": rec.get("new_price"),
+                        "strategy": rec.get("pricing_strategy"),
+                        "duration": rec.get("duration"),
+                        "reasoning": rec.get("reasoning"),
+                        "risk_assessment": rec.get("risk_assessment"),
+                    },
                     "status": "pending",
-                    "created_at": asyncio.get_event_loop().time()
+                    "created_at": datetime.utcnow().isoformat()
                 }
-                
+
                 result = self.supabase.table("agent_actions").insert(action_data).execute()
                 from app.main import broadcast_agent_action  # lazy import
                 broadcast_agent_action(action_data)

@@ -12,6 +12,7 @@ A sophisticated AI-native logistics system powered by Groq LLMs that provides in
 
 ### 🧠 LLM-Powered Decision Making
 - Uses Groq's fast LLMs for real-time decision making
+- Wraps Groq via AG2 (AutoGen) conversational agents for structured JSON decisions
 - Structured JSON responses for consistent data handling
 - Context-aware decisions based on current system state
 - Multi-agent coordination for complex scenarios
@@ -66,8 +67,8 @@ Ensure your Supabase database has the following tables:
 - `orders`
 - `fleet`
 - `agent_logs`
-- `agentic_actions`
-- `agentic_decisions`
+- `agent_actions`
+- `agent_decisions`
 
 ## 🚀 Running the System
 
@@ -238,7 +239,7 @@ All agent actions are logged to the `agent_logs` table with:
 - Timestamp and status
 
 ### Action Tracking
-Agent decisions are tracked in `agentic_actions` table:
+Agent decisions are tracked in the `agent_actions` table:
 - Action type and target
 - Status (pending/approved/rejected)
 - Execution details

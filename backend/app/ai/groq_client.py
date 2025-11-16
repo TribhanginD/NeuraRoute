@@ -3,24 +3,28 @@ import json
 import time
 from typing import Dict, List, Any, Optional
 from groq import Groq
-from groq.types.chat import ChatCompletion
 from ..core.config import settings
 
 class GroqClient:
     def __init__(self):
-        self.client = Groq(api_key=settings.GROQ_API_KEY)
+        client_kwargs = {"api_key": settings.GROQ_API_KEY}
+        if settings.GROQ_BASE_URL:
+            client_kwargs["base_url"] = settings.GROQ_BASE_URL
+        self.client = Groq(**client_kwargs)
         self.model = settings.GROQ_MODEL
+        self.default_temperature = settings.GROQ_TEMPERATURE
         print(f"🔧 GroqClient initialized with model: {self.model}")
-    
+
     async def get_completion(
         self, 
         messages: List[Dict[str, str]], 
-        temperature: float = 0.7,
+        temperature: float = None,
         max_tokens: int = 1000
     ) -> Optional[str]:
         """Get completion from Groq LLM"""
         start_time = time.time()
         request_id = f"groq_{int(start_time * 1000)}"
+        temperature = temperature if temperature is not None else self.default_temperature
         
         print(f"\n🚀 [GROQ REQUEST] {request_id}")
         print(f"📤 Model: {self.model}")

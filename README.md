@@ -7,8 +7,13 @@ An intelligent operating system for small city sectors, featuring autonomous age
 ### Core System
 - **LCM-Style Demand Forecaster**: AI-powered demand prediction using structured context
 - **LAM-Style Autonomous Agents**: Goal-driven planners executing toolchains
+<<<<<<< Updated upstream
 - **Agentic AI System**: Autonomous decision-making with approval workflows
 - **15-Minute Tick Simulation**: Real-time state updates in Supabase
+=======
+- **🆕 Agentic AI System**: Autonomous decision-making with approval workflows
+- **15-Minute Tick Simulation**: Real-time state updates in the local SQL store
+>>>>>>> Stashed changes
 - **Professional Frontend**: Modern UI with merchant chat, ops console, live route map, agent logs, and simulation playback
 
 ### AI/ML Capabilities
@@ -34,7 +39,6 @@ An intelligent operating system for small city sectors, featuring autonomous age
 - **Order Details**: Comprehensive order information including quantities, delivery dates, locations, and reasons
 
 ### Frontend Components
-- **Merchant Chat Interface**: Real-time communication with merchants
 - **Operations Console**: Centralized control and monitoring
 - **Agentic Dashboard**: Action approval interface and simulation controls
 - **Live Route Map**: Real-time fleet tracking and route visualization
@@ -45,8 +49,8 @@ An intelligent operating system for small city sectors, featuring autonomous age
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Supabase      │    │   Redis Cache   │
-│   (React)       │◄──►│   (Database)    │◄──►│   (Caching)     │
+│   Frontend      │    │   SQL Database  │    │   Redis Cache   │
+│   (React)       │◄──►│   (SQLite)      │◄──►│   (Caching)     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          │              ┌─────────────────┐              │
@@ -69,9 +73,8 @@ An intelligent operating system for small city sectors, featuring autonomous age
 ##  Tech Stack
 
 ### Data Layer
-- **Supabase** for primary database and real-time subscriptions
+- **SQLite + SQLAlchemy** for the primary transactional store
 - **Redis** for caching and session management
-- **PostgreSQL** (via Supabase) for data storage
 
 ### Frontend
 - **React 18** with TypeScript
@@ -79,12 +82,21 @@ An intelligent operating system for small city sectors, featuring autonomous age
 - **Mapbox/Leaflet** for mapping
 - **React Query** for data fetching
 - **Zustand** for state management
+<<<<<<< Updated upstream
 - ** Agentic UI Components** for action approval and simulation
 - **Supabase JS Client** for database operations
 
 ### AI/ML
 - **GPT-4o** and **Anthropic Claude** for reasoning
 - ** Function Calling** for autonomous action execution
+=======
+- **🆕 Agentic UI Components** for action approval and simulation
+
+### AI/ML
+- **GPT-4o** and **Anthropic Claude** for reasoning
+- **🆕 Function Calling** for autonomous action execution
+- **🆕 AG2 (AutoGen) Conversable Agents** coordinating Groq-backed structured decisions
+>>>>>>> Stashed changes
 - **Prophet** for time series forecasting
 - **YOLO** for traffic analysis
 - **BERT/RoBERTa** for sentiment analysis
@@ -96,8 +108,12 @@ An intelligent operating system for small city sectors, featuring autonomous age
 ### Prerequisites
 - Docker and Docker Compose
 - Node.js 18+ (for development)
+<<<<<<< Updated upstream
 - ** Supabase account and project**
 - ** OpenAI API key or Anthropic API key**
+=======
+- **🆕 OpenAI API key or Anthropic API key**
+>>>>>>> Stashed changes
 
 ### Quick Start
 ```bash
@@ -108,9 +124,7 @@ cd NeuraRoute
 # Copy environment template
 cp .env.example .env
 
-# Configure Supabase and AI API keys
-echo "REACT_APP_SUPABASE_URL=your_supabase_url" >> .env
-echo "REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key" >> .env
+# Configure AI API keys (optional)
 echo "OPENAI_API_KEY=your_openai_api_key" >> .env
 echo "ANTHROPIC_API_KEY=your_anthropic_api_key" >> .env
 
@@ -124,16 +138,36 @@ echo "ANTHROPIC_API_KEY=your_anthropic_api_key" >> .env
 
 ### Manual Setup
 ```bash
-# Frontend setup
+# Backend setup
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Frontend setup (in a new terminal)
 cd frontend
 npm install
-
-# Start services
-docker-compose up -d redis
 npm start
 ```
 
+<<<<<<< Updated upstream
 ##  Usage
+=======
+### Backend Environment Variables
+Create `backend/.env` (optional) to override defaults:
+
+```bash
+# Change the path or switch to Postgres by updating the URL
+DATABASE_URL=sqlite:///./neuraroute.db
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama3-8b-8192
+AUTO_START_AGENTS=true
+AUTO_START_SIMULATION=true
+```
+
+`AUTO_START_AGENTS` and `AUTO_START_SIMULATION` can be set to `false` if you prefer to manually control their lifecycle via the API.
+
+## 🚀 Usage
+>>>>>>> Stashed changes
 
 ### Starting the System
 ```bash
@@ -161,7 +195,6 @@ The agentic system can process situations through the frontend interface:
 3. ** Use the Agentic Dashboard for autonomous action approval**
 4. Monitor agent performance in the Agent Monitor
 5. View live routes on the Fleet Map
-6. Chat with merchants through the Merchant Chat interface
 
 ###  Purchase Order & Disposal Order Workflow
 
@@ -180,23 +213,38 @@ The agentic system can process situations through the frontend interface:
 - **Disposal Orders**: `pending` → `approved` → `completed` → `cancelled`
 
 ### Database Setup
+<<<<<<< Updated upstream
 1. Create a Supabase project
 2. Run the SQL scripts in `database/` to set up tables
 3. ** Run the purchase orders schema script** (`database/purchase_orders_schema.sql`)
 4. Configure environment variables with your Supabase credentials
 5. The frontend will automatically connect to Supabase for all data operations
+=======
+The backend maintains a lightweight SQLite database automatically. On first boot it creates
+`neuraroute.db` and seeds it with realistic demo data taken from `backend/app/db/sample_data.py`.
+
+To customize or reset the dataset:
+1. Stop the backend.
+2. Delete `neuraroute.db`.
+3. Edit `sample_data.py` with your desired rows.
+4. Restart the backend (or run `python -m app.db.init_db`) and the schema plus seed records will be recreated.
+5. Optionally set `DATABASE_URL` to point at a Postgres instance if you prefer an external database.
+>>>>>>> Stashed changes
 
 ##  Database Schema
 
-The system uses the following Supabase tables:
+The local database includes:
 - `fleet` - Vehicle and driver information
 - `merchants` - Merchant profiles and locations
 - `inventory` - Product inventory and stock levels
 - `orders` - Customer orders and delivery information
+- `routes` - Delivery route definitions
 - `agents` - AI agent configurations and status
 - `agent_actions` - Pending and historical agent actions
+- `agent_decisions` - Structured LLM decisions awaiting approval
 - `agent_logs` - Agent decision history
 - `simulation_status` - Current simulation state
+<<<<<<< Updated upstream
 - `agent_plans` - Agent execution plans
 - ** `purchase_orders`** - Purchase order tracking for inventory management
 - ** `disposal_orders`** - Disposal order tracking for inventory clearance
@@ -237,6 +285,10 @@ CREATE TABLE disposal_orders (
     cost_savings DECIMAL(10,2)
 );
 ```
+=======
+- `purchase_orders` - Purchase order tracking for inventory management
+- `disposal_orders` - Disposal order tracking for inventory clearance
+>>>>>>> Stashed changes
 
 ##  Development
 
@@ -249,9 +301,16 @@ npm start
 
 ### Database Development
 ```bash
+<<<<<<< Updated upstream
 # Run SQL scripts in Supabase SQL editor
 # See database/ directory for schema files
 #  Don't forget to run purchase_orders_schema.sql for the new order system
+=======
+# Rebuild the local database (drops existing data)
+cd backend
+rm -f neuraroute.db
+python -m app.db.init_db
+>>>>>>> Stashed changes
 ```
 
 ### Testing
@@ -259,3 +318,10 @@ npm start
 cd frontend
 npm test
 ```
+<<<<<<< Updated upstream
+=======
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details. 
+>>>>>>> Stashed changes

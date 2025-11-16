@@ -4,7 +4,6 @@
   "description": "NeuraRoute AI-Native Hyperlocal Logistics System Frontend",
   "private": true,
   "dependencies": {
-    "@supabase/supabase-js": "^2.50.3",
     "@tailwindcss/forms": "^0.5.7",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
@@ -41,7 +40,7 @@
     "zustand": "^4.3.8"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "HOST=localhost DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
